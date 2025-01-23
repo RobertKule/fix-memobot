@@ -477,3 +477,53 @@ def save_chosen_subject(db: Session, user_id: int, subject_data: schemas.SaveCho
     create_user_history(db, schemas.UserHistoryCreate(**history_data))
     
     return sujet
+# ========== CONVERSATION FUNCTIONS ==========
+
+def clear_conversation_history(db: Session, user_id: int) -> int:
+    """Supprime tous les messages de conversation d'un utilisateur"""
+    try:
+        # Compter avant suppression pour le log
+        count = db.query(ConversationMessage).filter(
+            ConversationMessage.user_id == user_id
+        ).count()
+        
+        # Supprimer les messages
+        db.query(ConversationMessage).filter(
+            ConversationMessage.user_id == user_id
+        ).delete()
+        
+        db.commit()
+        print(f"✅ Conversation supprimée pour user {user_id}: {count} messages")
+        return count
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erreur suppression conversation: {e}")
+        raise e
+
+def get_conversation_history(db: Session, user_id: int, limit: int = 10) -> List[ConversationMessage]:
+    """Récupère l'historique de conversation d'un utilisateur"""
+    try:
+        return db.query(ConversationMessage).filter(
+            ConversationMessage.user_id == user_id
+        ).order_by(ConversationMessage.timestamp.desc()).limit(limit).all()
+    except Exception as e:
+        print(f"❌ Erreur récupération historique: {e}")
+        return []
+
+def save_conversation_message(db: Session, user_id: int, role: str, content: str) -> ConversationMessage:
+    """Sauvegarde un message de conversation"""
+    try:
+        db_message = ConversationMessage(
+            user_id=user_id,
+            role=role,
+            content=content,
+            timestamp=datetime.utcnow()
+        )
+        db.add(db_message)
+        db.commit()
+        db.refresh(db_message)
+        return db_message
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erreur sauvegarde message: {e}")
+        raise e

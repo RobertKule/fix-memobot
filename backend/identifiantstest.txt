@@ -1,0 +1,20 @@
+Identifiants de test:
+  Email: admin@thesis.com
+  Mot de passe: admin123
+  Rôle: admin
+
+  Email: rkule@thesis.com
+  Mot de passe: 123456
+  Rôle: admin
+
+  Email: enseignant@thesis.com
+  Mot de passe: enseignant123
+  Rôle: enseignant
+
+  Email: etudiant@thesis.com
+  Mot de passe: etudiant123
+  Rôle: etudiant
+
+  Email: etudiant2@thesis.com
+  Mot de passe: etudiant123
+  Rôle: etudiant

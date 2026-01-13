@@ -1,0 +1,24 @@
+# Core
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+python-jose[cryptography]
+passlib[bcrypt]
+python-dotenv
+pydantic
+pandas
+python-multipart
+
+# Database
+psycopg2-binary
+asyncpg
+
+# LLM & LangChain
+langchain
+langchain-google-genai
+google-generativeai
+
+# Utils
+python-Levenshtein
+numpy

@@ -1,4 +1,3 @@
-// src/components/layout/dashboard-header.tsx
 'use client'
 
 import { Menu, Search, Bell, User, MessageSquare } from 'lucide-react'
@@ -6,6 +5,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import ThemeToggle from '@/components/ui/theme-toggle'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface DashboardHeaderProps {
   onMenuClick: () => void
@@ -13,6 +13,12 @@ interface DashboardHeaderProps {
 
 export default function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const { user, logout } = useAuth()
+
+  const handleLogout = () => {
+    logout()
+    setUserMenuOpen(false)
+  }
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16">
@@ -68,8 +74,14 @@ export default function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
                   <User className="w-5 h-5 text-white" />
                 </div>
                 <div className="hidden lg:block text-left">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">Jean Dupont</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Master Informatique</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {user?.full_name || 'Utilisateur'}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {user?.role === 'etudiant' ? 'Étudiant' : 
+                     user?.role === 'enseignant' ? 'Enseignant' : 
+                     user?.role === 'admin' ? 'Administrateur' : ''}
+                  </p>
                 </div>
               </button>
 
@@ -82,13 +94,18 @@ export default function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
                     className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50"
                   >
                     <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">Jean Dupont</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">jean.dupont@universite.ac</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {user?.full_name || 'Utilisateur'}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {user?.email || 'email@exemple.com'}
+                      </p>
                     </div>
                     
                     <Link 
                       href="/dashboard/profile" 
                       className="block px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      onClick={() => setUserMenuOpen(false)}
                     >
                       Mon profil
                     </Link>
@@ -96,12 +113,16 @@ export default function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
                     <Link 
                       href="/dashboard/settings" 
                       className="block px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      onClick={() => setUserMenuOpen(false)}
                     >
                       Paramètres
                     </Link>
                     
                     <div className="border-t border-gray-200 dark:border-gray-700 mt-2">
-                      <button className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
                         Déconnexion
                       </button>
                     </div>

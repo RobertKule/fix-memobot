@@ -1,8 +1,9 @@
+// src/components/providers.tsx
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
-import { AuthProvider } from '@/lib/auth-context'
+import { AuthProvider } from '@/contexts/AuthContext'  // CHANGÉ ICI
 import { useState } from 'react'
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -17,7 +18,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
+      <AuthProvider>  {/* Maintenant, cela utilise votre vrai AuthContext */}
         {children}
         <Toaster 
           position="top-right"

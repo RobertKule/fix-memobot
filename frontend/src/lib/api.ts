@@ -1,12 +1,159 @@
-// src/lib/api.ts - VERSION COMPLÈTE ET CORRIGÉE
+// src/lib/api.ts - VERSION COMPLÈTE CORRIGÉE
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+// ========== TYPES DÉFINIS EN PREMIER ==========
+
+export interface User {
+  id: number;
+  email: string;
+  full_name: string;
+  role: 'admin' | 'enseignant' | 'etudiant';
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface UserProfile {
+  id?: number;
+  user_id: number;
+  bio?: string;
+  location?: string;
+  university?: string;
+  field?: string;
+  level?: string;
+  interests?: string;
+  phone?: string;
+  website?: string;
+  linkedin?: string;
+  github?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserSkill {
+  id: number;
+  user_id: number;
+  name: string;
+  level: number;
+  category?: string;
+  created_at: string;
+}
+
+export interface UserStats {
+  profile_completion: number;
+  explored_subjects: number;
+  recommendations_count: number;
+  active_days: number;
+  last_active: string;
+}
+
+export interface Sujet {
+  id: number;
+  titre: string;
+  keywords: string;
+  domaine: string;
+  faculté: string;
+  niveau: string;
+  problématique: string;
+  méthodologie?: string;
+  technologies?: string;
+  description: string;
+  difficulté: 'facile' | 'moyenne' | 'difficile';
+  durée_estimée?: string;
+  ressources?: string;
+  vue_count: number;
+  like_count: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface RecommendedSujet {
+  sujet: Sujet;
+  score: number;
+  raisons: string[];
+  critères_respectés: string[];
+}
+
+export interface AIResponse {
+  question: string;
+  réponse: string;
+  suggestions: string[];
+}
+
+
+export interface GeneratedSubject {
+  titre: string;
+  problématique: string;
+  keywords: string;
+  description: string;
+  methodologie: string;
+  difficulté: string;
+  durée_estimée: string;
+}
+
+export interface AIAnalysisResponse {
+  pertinence: number;
+  points_forts: string[];
+  points_faibles: string[];
+  suggestions: string[];
+  recommandations: string[];
+}
+
+export interface AcceptanceCriteria {
+  critères_acceptation: string[];
+  critères_rejet: string[];
+  conseils_pratiques: string[];
+}
+
+export interface UserPreference {
+  id: number;
+  user_id: number;
+  interests?: string;
+  faculty?: string;
+  level?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Feedback {
+  id: number;
+  user_id: number;
+  sujet_id: number;
+  rating?: number;
+  pertinence?: number;
+  commentaire?: string;
+  intéressé: boolean;
+  sélectionné: boolean;
+  created_at: string;
+}
+
+export interface StatsDomains {
+  domaine: string;
+  count: number;
+  avg_views: number;
+}
+
+export interface PopularKeyword {
+  keyword: string;
+  count: number;
+}
+
+export interface HealthCheck {
+  status: string;
+  service: string;
+}
+
+export interface Config {
+  database_url: string;
+  gemini_api_key: string;
+  environment: string;
+}
+
+// ========== CLASSE API SERVICE ==========
 class ApiService {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    // IMPORTANT: Les routes FastAPI commencent par /api/v1
     const url = `${API_BASE_URL}${endpoint}`;
     
     console.log('🔄 API Request:', {
@@ -15,13 +162,18 @@ class ApiService {
       method: options.method || 'GET'
     });
 
-    const headers = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    // Récupérer le token depuis localStorage
-    const token = localStorage.getItem('access_token');
+    // Récupérer le token depuis localStorage seulement côté client
+    let token: string | null = null;
+    if (typeof window !== 'undefined') {
+      token = localStorage.getItem('access_token');
+      console.log('Token available:', !!token);
+    }
+
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -30,6 +182,7 @@ class ApiService {
       const response = await fetch(url, {
         ...options,
         headers,
+        credentials: 'include',
       });
 
       console.log('📡 API Response:', {
@@ -38,6 +191,15 @@ class ApiService {
         statusText: response.statusText,
         ok: response.ok
       });
+
+      // Si erreur 401, nettoyer le token
+      if (response.status === 401) {
+        console.log('Unauthorized, removing token');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('access_token');
+        }
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
 
       if (!response.ok) {
         let errorData;
@@ -49,11 +211,11 @@ class ApiService {
           errorData = { detail: errorText || `HTTP ${response.status}: ${response.statusText}` };
         }
         
-        throw new Error(
-          typeof errorData === 'object' 
-            ? (errorData.detail || errorData.message || JSON.stringify(errorData))
-            : errorData
-        );
+        const errorMessage = typeof errorData === 'object' 
+          ? (errorData.detail || errorData.message || JSON.stringify(errorData))
+          : errorData;
+        
+        throw new Error(errorMessage);
       }
 
       // Si la réponse est vide (ex: DELETE), retourner true
@@ -72,10 +234,9 @@ class ApiService {
 
   // ========== AUTH ==========
   async login(email: string, password: string) {
-    // CORRECTION: Utiliser login-json avec email/password en JSON
     return this.request<{ access_token: string; token_type: string }>('/auth/login-json', {
       method: 'POST',
-      body: JSON.stringify({ email, password }), // email, pas username
+      body: JSON.stringify({ email, password }),
     });
   }
 
@@ -204,6 +365,76 @@ class ApiService {
     });
   }
 
+  // ========== USERS ==========
+  async getUserProfile(userId: number): Promise<UserProfile> {
+    try {
+      return await this.request<UserProfile>(`/users/${userId}/profile`);
+    } catch (error) {
+      console.log('Using mock profile data');
+      // Données mock temporaires
+      return {
+        user_id: userId,
+        bio: '',
+        location: '',
+        university: '',
+        field: '',
+        level: '',
+        interests: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    }
+  }
+
+  async getUserSkills(userId: number): Promise<UserSkill[]> {
+    try {
+      return await this.request<UserSkill[]>(`/users/${userId}/skills`);
+    } catch (error) {
+      console.log('Using mock skills data');
+      return [];
+    }
+  }
+
+  async getUserStats(userId: number): Promise<UserStats> {
+    try {
+      return await this.request<UserStats>(`/users/${userId}/stats`);
+    } catch (error) {
+      console.log('Using mock stats data');
+      return {
+        profile_completion: 0,
+        explored_subjects: 0,
+        recommendations_count: 0,
+        active_days: 0,
+        last_active: new Date().toISOString()
+      };
+    }
+  }
+
+  async updateUserProfile(userId: number, data: Partial<UserProfile>): Promise<UserProfile> {
+    try {
+      return await this.request<UserProfile>(`/users/${userId}/profile`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    } catch (error) {
+      console.log('Mock update profile');
+      // Simulation de mise à jour
+      return {
+        user_id: userId,
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as UserProfile;
+    }
+  }
+
+  async updateUserSkills(userId: number, skills: UserSkill[]) {
+    return this.request<UserSkill[]>(`/users/${userId}/skills`, {
+      method: 'PUT',
+      body: JSON.stringify({ skills }),
+    });
+  }
+
   // ========== FEEDBACK ==========
   async submitFeedback(data: {
     sujet_id: number;
@@ -225,141 +456,39 @@ class ApiService {
   }
 
   async getPopularKeywords(limit: number = 20) {
-    return this.request<{ keyword: string; count: number }[]>(
+    return this.request<PopularKeyword[]>(
       `/sujets/stats/keywords?limit=${limit}`
     );
   }
 
   async getDomainsStats() {
-    return this.request<{ domaine: string; count: number; avg_views: number }[]>(
+    return this.request<StatsDomains[]>(
       '/sujets/stats/domains'
     );
   }
 
   // ========== UTILITAIRES ==========
   async healthCheck() {
-    return this.request<{ status: string; service: string }>('/health');
+    return this.request<HealthCheck>('/health');
   }
 
   async getConfig() {
-    return this.request<{
-      database_url: string;
-      gemini_api_key: string;
-      environment: string;
-    }>('/config');
+    return this.request<Config>('/config');
   }
 }
 
+// ========== EXPORT ==========
 export const api = new ApiService();
 
-// Types
-export interface User {
-  id: number;
-  email: string;
-  full_name: string;
-  role: 'admin' | 'enseignant' | 'etudiant';
-  is_active: boolean;
-  created_at: string;
-}
-
-export interface Sujet {
-  id: number;
-  titre: string;
-  keywords: string;
-  domaine: string;
-  faculté: string;
-  niveau: string;
-  problématique: string;
-  méthodologie?: string;
-  technologies?: string;
-  description: string;
-  difficulté: 'facile' | 'moyenne' | 'difficile';
-  durée_estimée?: string;
-  ressources?: string;
-  vue_count: number;
-  like_count: number;
-  is_active: boolean;
-  created_at: string;
-}
-
-export interface RecommendedSujet {
-  sujet: Sujet;
-  score: number;
-  raisons: string[];
-  critères_respectés: string[];
-}
-
-export interface AIResponse {
-  question: string;
-  réponse: string;
-  suggestions: string[];
-}
-
-export interface GeneratedSubject {
-  titre: string;
-  problématique: string;
-  keywords: string;
-  description: string;
-  methodologie: string;
-  difficulté: string;
-  durée_estimée: string;
-}
-
-export interface AIAnalysisResponse {
-  pertinence: number;
-  points_forts: string[];
-  points_faibles: string[];
-  suggestions: string[];
-  recommandations: string[];
-}
-
-export interface AcceptanceCriteria {
-  critères_acceptation: string[];
-  critères_rejet: string[];
-  conseils_pratiques: string[];
-}
-
-export interface UserPreference {
-  id: number;
-  user_id: number;
-  interests?: string;
-  faculty?: string;
-  level?: string;
-  created_at: string;
-  updated_at?: string;
-}
-
-export interface Feedback {
-  id: number;
-  user_id: number;
-  sujet_id: number;
-  rating?: number;
-  pertinence?: number;
-  commentaire?: string;
-  intéressé: boolean;
-  sélectionné: boolean;
-  created_at: string;
-}
-
-// Types pour les réponses API supplémentaires
-export interface StatsDomains {
-  domaine: string;
-  count: number;
-  avg_views: number;
-}
-
-export interface PopularKeyword {
-  keyword: string;
-  count: number;
-}
-
-export interface HealthCheck {
-  status: string;
-  service: string;
-}
-
-export interface Config {
-  database_url: string;
-  gemini_api_key: string;
-  environment: string;
+// Fonction utilitaire pour tester la connexion
+export async function testBackendConnection() {
+  try {
+    console.log('Testing backend connection...');
+    const health = await fetch(`${API_BASE_URL}/health`);
+    console.log('Backend health:', await health.json());
+    return true;
+  } catch (error) {
+    console.error('Backend not reachable:', error);
+    return false;
+  }
 }

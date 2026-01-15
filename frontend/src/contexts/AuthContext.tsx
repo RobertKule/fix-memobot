@@ -1,20 +1,19 @@
 // src/contexts/AuthContext.tsx
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { createContext, useContext, useEffect, useState } from 'react'
 import { api, User } from '@/lib/api'
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<User>
   register: (data: {
-    email: string;
-    full_name: string;
-    password: string;
-    role: 'etudiant' | 'enseignant' | 'admin';
-  }) => Promise<void>
+    email: string
+    full_name: string
+    password: string
+    role: 'etudiant' | 'enseignant' | 'admin'
+  }) => Promise<User>
   logout: () => void
   updateUser: (user: User) => void
 }
@@ -24,72 +23,121 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const router = useRouter()
 
+  /**
+   * 🔐 Initialisation de l'auth (1 seule fois)
+   */
   useEffect(() => {
-    checkAuth()
+    let mounted = true
+
+    const initAuth = async () => {
+      try {
+        const token = localStorage.getItem('access_token')
+
+        if (!token) {
+  if (mounted) {
+    setUser(null)
+    setIsLoading(false) // 👈 MANQUAIT ICI
+  }
+  return
+}
+
+
+        const userData = await api.getCurrentUser()
+        if (mounted) setUser(userData)
+
+      } catch (error) {
+        localStorage.removeItem('access_token')
+        if (mounted) setUser(null)
+
+      } finally {
+        if (mounted) setIsLoading(false)
+      }
+    }
+
+    initAuth()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
-  const checkAuth = async () => {
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      const userData = await api.getCurrentUser()
-      setUser(userData)
-    } catch (error) {
-      console.error('Auth check failed:', error)
-      localStorage.removeItem('access_token')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const login = async (email: string, password: string) => {
+  /**
+   * 🔑 LOGIN
+   */
+  const login = async (email: string, password: string): Promise<User> => {
     setIsLoading(true)
+
     try {
       const response = await api.login(email, password)
+
+      if (!response?.access_token) {
+        throw new Error('No access token received')
+      }
+
       localStorage.setItem('access_token', response.access_token)
-      
+
       const userData = await api.getCurrentUser()
       setUser(userData)
-      
-      router.push('/dashboard')
+
+      return userData
+
+    } catch (error: any) {
+      localStorage.removeItem('access_token')
+      setUser(null)
+      throw new Error(error.message || 'Échec de la connexion')
+
     } finally {
       setIsLoading(false)
     }
   }
 
+  /**
+   * 📝 REGISTER
+   */
   const register = async (data: {
-    email: string;
-    full_name: string;
-    password: string;
-    role: 'etudiant' | 'enseignant' | 'admin';
-  }) => {
+    email: string
+    full_name: string
+    password: string
+    role: 'etudiant' | 'enseignant' | 'admin'
+  }): Promise<User> => {
     setIsLoading(true)
+
     try {
-      const userData = await api.register(data)
-      setUser(userData)
-      
-      // Auto-login after registration
+      await api.register(data)
+
       const loginResponse = await api.login(data.email, data.password)
+
+      if (!loginResponse?.access_token) {
+        throw new Error('No access token after registration')
+      }
+
       localStorage.setItem('access_token', loginResponse.access_token)
-      
-      router.push('/dashboard')
+
+      const userData = await api.getCurrentUser()
+      setUser(userData)
+
+      return userData
+
+    } catch (error: any) {
+      throw new Error(error.message || 'Échec de l’inscription')
+
     } finally {
       setIsLoading(false)
     }
   }
 
+  /**
+   * 🚪 LOGOUT
+   */
   const logout = () => {
     localStorage.removeItem('access_token')
     setUser(null)
-    router.push('/login')
   }
 
+  /**
+   * 🔄 UPDATE USER
+   */
   const updateUser = (updatedUser: User) => {
     setUser(updatedUser)
   }

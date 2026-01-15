@@ -29,7 +29,7 @@ app.include_router(ai.router, prefix="/api/v1/ai", tags=["ai"])
 
 @app.get("/")
 def read_root():
-    return {"message": "Bienvenue sur l'API MemoBot"}
+    return {"message": "Bienvenue sur l'API MemoBot de l'Ir Kitsa!"}
 
 @app.get("/health")
 def health_check():

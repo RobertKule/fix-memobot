@@ -223,3 +223,40 @@ async def get_domains_stats(db: Session = Depends(get_db)):
         {"domaine": domaine, "count": count, "avg_views": round(avg_views or 0, 1)}
         for domaine, count, avg_views in stats
     ]
+    
+@router.get("/stats/popular")
+def get_popular_sujets(
+    limit: int = 5,
+    db: Session = Depends(get_db)
+):
+    """
+    Récupérer les sujets les plus populaires
+    """
+    # Pour l'instant, retourner des données mock
+    # Vous pourrez remplacer par une vraie requête plus tard
+    return [
+        {
+            "id": 1,
+            "titre": "Impact de l'IA sur la cybersécurité moderne",
+            "domaine": "Informatique",
+            "niveau": "Master 2",
+            "vue_count": 125,
+            "created_at": "2024-01-15T10:30:00"
+        },
+        {
+            "id": 2,
+            "titre": "Blockchain pour la traçabilité alimentaire",
+            "domaine": "Informatique",
+            "niveau": "Master 1",
+            "vue_count": 89,
+            "created_at": "2024-01-14T14:20:00"
+        },
+        {
+            "id": 3,
+            "titre": "Optimisation des réseaux 5G avec IA",
+            "domaine": "Télécommunications",
+            "niveau": "Master 2",
+            "vue_count": 76,
+            "created_at": "2024-01-13T09:15:00"
+        }
+    ]

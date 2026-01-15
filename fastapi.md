@@ -1,4 +1,3 @@
-
 # 📘 COURS COMPLET – FASTAPI (DÉBUTANT)
 
 ---
@@ -9,17 +8,17 @@ Aujourd’hui, beaucoup d’applications ne sont plus seulement des sites web.
 
 Elles sont :
 
-* des **APIs**
-* des **backends pour mobile**
-* des **services pour IA**
-* des **microservices**
+- des **APIs**
+- des **backends pour mobile**
+- des **services pour IA**
+- des **microservices**
 
 Pour cela, on a besoin de frameworks :
 
-* rapides
-* simples
-* scalables
-* modernes
+- rapides
+- simples
+- scalables
+- modernes
 
 👉 **FastAPI a été créé pour répondre à ce besoin.**
 
@@ -33,9 +32,9 @@ Pour cela, on a besoin de frameworks :
 
 En termes simples :
 
-* Il reçoit des requêtes HTTP
-* Il traite les données
-* Il renvoie des réponses (souvent en JSON)
+- Il reçoit des requêtes HTTP
+- Il traite les données
+- Il renvoie des réponses (souvent en JSON)
 
 📌 FastAPI **ne fait PAS de pages HTML** par défaut
 📌 Il est fait pour **communiquer entre systèmes**
@@ -46,10 +45,10 @@ En termes simples :
 
 Un framework Python est un **ensemble d’outils** qui :
 
-* évite d’écrire du code répétitif
-* impose une structure
-* facilite la maintenance
-* améliore la sécurité
+- évite d’écrire du code répétitif
+- impose une structure
+- facilite la maintenance
+- améliore la sécurité
 
 ---
 
@@ -61,21 +60,21 @@ Un framework Python est un **ensemble d’outils** qui :
 
 | Framework   | Type       | Async | ORM intégré | Auth intégrée | Cas d’usage    |
 | ----------- | ---------- | ----- | ----------- | ------------- | -------------- |
-| **Django**  | Full-stack | ❌     | ✅           | ✅             | Sites complets |
-| **FastAPI** | API        | ✅     | ❌           | ❌             | APIs modernes  |
-| **Flask**   | Micro      | ❌     | ❌           | ❌             | Petits projets |
-| **Pyramid** | Flexible   | ❌     | ❌           | ❌             | Projets custom |
-| **Sanic**   | API        | ✅     | ❌           | ❌             | Haute perf     |
-| **Tornado** | Bas niveau | ✅     | ❌           | ❌             | WebSockets     |
+| **Django**  | Full-stack | ❌    | ✅          | ✅            | Sites complets |
+| **FastAPI** | API        | ✅    | ❌          | ❌            | APIs modernes  |
+| **Flask**   | Micro      | ❌    | ❌          | ❌            | Petits projets |
+| **Pyramid** | Flexible   | ❌    | ❌          | ❌            | Projets custom |
+| **Sanic**   | API        | ✅    | ❌          | ❌            | Haute perf     |
+| **Tornado** | Bas niveau | ✅    | ❌          | ❌            | WebSockets     |
 
 ---
 
 ## Lecture simple du tableau
 
-* **Django** : fait tout, mais lourd pour API
-* **FastAPI** : API propre, rapide, moderne
-* **Flask** : simple mais limité
-* **Sanic / Tornado** : rapides mais complexes
+- **Django** : fait tout, mais lourd pour API
+- **FastAPI** : API propre, rapide, moderne
+- **Flask** : simple mais limité
+- **Sanic / Tornado** : rapides mais complexes
 
 ---
 
@@ -85,20 +84,20 @@ FastAPI est populaire parce qu’il :
 
 ### ✅ Est très rapide
 
-* Basé sur Starlette + ASGI
+- Basé sur Starlette + ASGI
 
 ### ✅ Est facile à lire
 
-* Python clair
-* Typage explicite
+- Python clair
+- Typage explicite
 
 ### ✅ Évite les erreurs
 
-* Validation automatique
+- Validation automatique
 
 ### ✅ Génère la documentation
 
-* Swagger automatique
+- Swagger automatique
 
 ---
 
@@ -182,8 +181,8 @@ uvicorn main:app --reload
 
 ### Étape 4 : tester
 
-* [http://localhost:8000](http://localhost:8000)
-* [http://localhost:8000/docs](http://localhost:8000/docs)
+- [http://localhost:8000](http://localhost:8000)
+- [http://localhost:8000/docs](http://localhost:8000/docs)
 
 👉 Swagger généré automatiquement 🎉
 
@@ -193,10 +192,10 @@ uvicorn main:app --reload
 
 Sans écrire de code :
 
-* Validation des types
-* Documentation
-* Gestion JSON
-* Erreurs HTTP
+- Validation des types
+- Documentation
+- Gestion JSON
+- Erreurs HTTP
 
 ---
 
@@ -214,10 +213,10 @@ Sans écrire de code :
 
 # 1️⃣1️⃣ CE QUE TU DOIS COMPRENDRE AVANT DE CONTINUER
 
-* FastAPI est **stateless**
-* Le client envoie toujours les infos
-* Le serveur ne garde rien en mémoire
-* JWT remplace la session
+- FastAPI est **stateless**
+- Le client envoie toujours les infos
+- Le serveur ne garde rien en mémoire
+- JWT remplace la session
 
 ---
 
@@ -234,9 +233,6 @@ Sans écrire de code :
 7. Sécurité
 8. Déploiement
 
-
-
-
 ## Niveau débutant → intermédiaire → avancé
 
 ---
@@ -247,8 +243,8 @@ Sans écrire de code :
 
 > **HTTP est un protocole de communication entre un client et un serveur.**
 
-* Client → navigateur, mobile, frontend
-* Serveur → FastAPI, Django, backend
+- Client → navigateur, mobile, frontend
+- Serveur → FastAPI, Django, backend
 
 📌 HTTP fonctionne par **requête / réponse**
 
@@ -378,9 +374,9 @@ def create_user(user: UserCreate):
 
 📌 FastAPI :
 
-* vérifie les champs
-* refuse les champs manquants
-* retourne une erreur claire
+- vérifie les champs
+- refuse les champs manquants
+- retourne une erreur claire
 
 ---
 
@@ -409,9 +405,9 @@ Si `password` manquant 👉 **422 Error**
 
 Un JWT est :
 
-* un texte encodé
-* signé
-* envoyé dans les headers
+- un texte encodé
+- signé
+- envoyé dans les headers
 
 ```http
 Authorization: Bearer eyJhbGciOi...
@@ -449,11 +445,11 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
 ## 🔹 À quoi ça sert ?
 
-* Auth
-* Logs
-* Sécurité
-* CORS
-* Rate limiting
+- Auth
+- Logs
+- Sécurité
+- CORS
+- Rate limiting
 
 ---
 
@@ -501,11 +497,11 @@ app/
 
 ## 🔹 Bonnes pratiques
 
-* JWT avec expiration
-* Hash des mots de passe (bcrypt)
-* CORS configuré
-* HTTPS en prod
-* Validation Pydantic
+- JWT avec expiration
+- Hash des mots de passe (bcrypt)
+- CORS configuré
+- HTTPS en prod
+- Validation Pydantic
 
 ---
 
@@ -533,10 +529,10 @@ uvicorn app.main:app --reload
 
 ## 🔹 En production
 
-* Gunicorn + Uvicorn
-* Docker
-* Nginx
-* Railway / Render / VPS
+- Gunicorn + Uvicorn
+- Docker
+- Nginx
+- Railway / Render / VPS
 
 ---
 
@@ -556,12 +552,12 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0"]
 
 À ce stade, tu comprends :
 
-* HTTP
-* API REST
-* FastAPI
-* JWT
-* Middleware
-* Structure propre
-* Sécurité backend
+- HTTP
+- API REST
+- FastAPI
+- JWT
+- Middleware
+- Structure propre
+- Sécurité backend
 
 👉 **Niveau junior backend API solide**

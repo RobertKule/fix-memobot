@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "css": "npx tailwindcss -i .\\src\\app\\tailwind.css -o .\\src\\app\\globals.css --watch"
+    "css": "npx tailwindcss -i .\\src\\app\\tailwind.css -o .\\src\\app\\globals.css --watch",
+    "happy": "echo 'Je suis Happy, votre Ir fullstack developer'"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

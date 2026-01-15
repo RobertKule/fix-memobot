@@ -33,8 +33,11 @@ def get_password_hash(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Crée un token JWT"""
     to_encode = data.copy()
+    
+    # S'assurer que 'sub' existe pour l'email
+    if 'sub' not in to_encode and 'email' in to_encode:
+        to_encode['sub'] = to_encode['email']
     
     if expires_delta:
         expire = datetime.utcnow() + expires_delta

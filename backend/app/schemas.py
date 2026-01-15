@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -14,7 +14,7 @@ class DifficultyLevel(str, Enum):
     MOYENNE = "moyenne"
     DIFFICILE = "difficile"
 
-# Auth
+# ========== AUTH SCHEMAS ==========
 class TokenData(BaseModel):
     email: Optional[str] = None
     role: Optional[str] = None
@@ -24,7 +24,7 @@ class Token(BaseModel):
     token_type: str
 
 class UserBase(BaseModel):
-    email: str = Field(..., description="Adresse email")
+    email: EmailStr = Field(..., description="Adresse email")
     full_name: str = Field(..., description="Nom complet")
     role: UserRole = Field(UserRole.STUDENT, description="Rôle de l'utilisateur")
 
@@ -32,7 +32,7 @@ class UserCreate(UserBase):
     password: str = Field(..., min_length=6, description="Mot de passe")
 
 class UserUpdate(BaseModel):
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     password: Optional[str] = None
 
@@ -45,17 +45,17 @@ class User(UserBase):
         from_attributes = True
 
 class UserLogin(BaseModel):
-    email: str = Field(..., description="Adresse email")
+    email: EmailStr = Field(..., description="Adresse email")
     password: str = Field(..., description="Mot de passe")
 
 class PasswordResetRequest(BaseModel):
-    email: str = Field(..., description="Adresse email")
+    email: EmailStr = Field(..., description="Adresse email")
 
 class PasswordReset(BaseModel):
     token: str = Field(..., description="Token de réinitialisation")
     new_password: str = Field(..., min_length=6, description="Nouveau mot de passe")
 
-# Sujets
+# ========== SUJET SCHEMAS ==========
 class SujetBase(BaseModel):
     titre: str = Field(..., description="Titre du sujet")
     keywords: str = Field(..., description="Mots-clés séparés par virgules")
@@ -98,7 +98,7 @@ class Sujet(SujetBase):
     class Config:
         from_attributes = True
 
-# Recommandation
+# ========== RECOMMENDATION SCHEMAS ==========
 class RecommendationRequest(BaseModel):
     interests: List[str] = Field(..., description="Centres d'intérêt")
     niveau: Optional[str] = None
@@ -113,7 +113,7 @@ class RecommendedSujet(BaseModel):
     raisons: List[str] = Field(..., description="Raisons de la recommandation")
     critères_respectés: List[str] = Field(..., description="Critères d'acceptation respectés")
 
-# Feedback
+# ========== FEEDBACK SCHEMAS ==========
 class FeedbackCreate(BaseModel):
     sujet_id: int = Field(..., description="ID du sujet")
     rating: Optional[int] = Field(None, ge=1, le=5, description="Note 1-5")
@@ -136,43 +136,19 @@ class Feedback(BaseModel):
     class Config:
         from_attributes = True
 
-# Préférences
-class PreferenceCreate(BaseModel):
-    interests: Optional[str] = Field(None, description="Intérêts")
-    faculty: Optional[str] = Field(None, description="Faculté")
-    level: Optional[str] = Field(None, description="Niveau")
-
-class Preference(BaseModel):
-    id: int
-    user_id: int
-    interests: Optional[str] = None
-    faculty: Optional[str] = None
-    level: Optional[str] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    
-    class Config:
-        from_attributes = True
-
-# IA
-class AIQuestion(BaseModel):
-    question: str = Field(..., description="Question")
-    context: Optional[str] = Field(None, description="Contexte supplémentaire")
-
-
-# Ajouter à app/schemas.py
+# ========== USER PREFERENCE SCHEMAS ==========
 class UserPreferenceBase(BaseModel):
-    interests: Optional[str] = ""
+    interests: Optional[str] = None
     faculty: Optional[str] = None
     level: Optional[str] = None
 
 class UserPreferenceCreate(UserPreferenceBase):
-    user_id: int
+    pass
 
 class UserPreferenceUpdate(UserPreferenceBase):
     pass
 
-class UserPreference(UserPreferenceBase):
+class UserPreferenceResponse(UserPreferenceBase):
     id: int
     user_id: int
     created_at: datetime
@@ -181,8 +157,27 @@ class UserPreference(UserPreferenceBase):
     class Config:
         from_attributes = True
 
-# Ajouter dans app/schemas.py
+# ========== USER PROFILE SCHEMAS ==========
+class UserProfileBase(BaseModel):
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    university: Optional[str] = None
+    field: Optional[str] = None
+    level: Optional[str] = None
+    interests: Optional[str] = None
 
+class UserProfileCreate(UserProfileBase):
+    user_id: int
+
+class UserProfileUpdate(UserProfileBase):
+    pass
+
+class UserProfile(UserProfileBase):
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+
+# ========== AI SCHEMAS ==========
 class AIRequest(BaseModel):
     question: str
     context: Optional[str] = None
@@ -224,3 +219,30 @@ class GeneratedSubject(BaseModel):
     methodologie: str
     difficulté: str
     durée_estimée: str
+
+class AcceptanceCriteria(BaseModel):
+    critères_acceptation: List[str]
+    critères_rejet: List[str]
+    conseils_pratiques: List[str]
+
+class TipsResponse(BaseModel):
+    choix_sujet: List[str]
+    methodologie: List[str]
+    redaction: List[str]
+    soutenance: List[str]
+
+class AIRecommendation(BaseModel):
+    id: int
+    score: float
+    raisons: List[str]
+    critères: List[str]
+
+# ========== UTILITY SCHEMAS ==========
+class PopularKeyword(BaseModel):
+    keyword: str
+    count: int
+
+class DomainStats(BaseModel):
+    domaine: str
+    count: int
+    avg_views: float

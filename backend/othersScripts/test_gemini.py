@@ -1,4 +1,5 @@
 # test_gemini_new.py
+
 import os
 import sys
 from dotenv import load_dotenv
@@ -16,7 +17,6 @@ if __name__ == "__main__":
     # Test de connexion
     if test_gemini():
         print("\n✅ Connexion réussie!")
-        
         # Test de message à une question
         print("\n🤖 Test de question...")
         response = répondre_question("Quels sont les critères d'acceptation d'un sujet de mémoire?")

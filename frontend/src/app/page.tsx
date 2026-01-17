@@ -3,21 +3,20 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { easeIn, easeOut, easeInOut } from "framer-motion"
+import { easeOut, easeInOut } from "framer-motion"
 
-import { ArrowRight, GraduationCap, BookOpen, Filter, Target, Clock, Check, Users, Shield, Lightbulb, Sparkles, MessageSquare } from 'lucide-react'
+import { ArrowRight, GraduationCap, BookOpen, Filter, Target, Clock, Check, Users, Lightbulb, MessageSquare, Sparkles } from 'lucide-react'
 import Header from '@/components/layout/header'
 import Footer from '@/components/layout/footer'
 import QuickChat from '@/components/chat/quick-chat'
 import ThemeToggle from '@/components/ui/theme-toggle'
 import Link from 'next/link'
 
-// Composant pour les particules (CSR seulement)
+// Composant pour particules côté client
 const AnimatedParticles = () => {
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number }>>([])
 
   useEffect(() => {
-    // Générer les particules uniquement côté client
     const newParticles = Array.from({ length: 20 }, (_, i) => ({
       id: i,
       x: Math.random() * 100,
@@ -30,24 +29,13 @@ const AnimatedParticles = () => {
 
   return (
     <>
-      {particles.map((particle) => (
+      {particles.map((p) => (
         <motion.div
-          key={particle.id}
+          key={p.id}
           className="absolute w-1 h-1 bg-white/20 rounded-full"
-          initial={{
-            x: `${particle.x}%`,
-            y: `${particle.y}%`,
-            opacity: 0
-          }}
-          animate={{
-            y: [null, '-100%'],
-            opacity: [0, 1, 0]
-          }}
-          transition={{
-            duration: Math.random() * 3 + 2,
-            repeat: Infinity,
-            delay: Math.random() * 2
-          }}
+          initial={{ x: `${p.x}%`, y: `${p.y}%`, opacity: 0 }}
+          animate={{ y: [null, '-100%'], opacity: [0, 1, 0] }}
+          transition={{ duration: Math.random() * 3 + 2, repeat: Infinity, delay: Math.random() * 2 }}
         />
       ))}
     </>
@@ -56,92 +44,81 @@ const AnimatedParticles = () => {
 
 export default function HomePage() {
   const [mounted, setMounted] = useState(false)
+  const [isClient, setIsClient] = useState(false)
+  const [backendStatus, setBackendStatus] = useState<'loading' | 'ok' | 'error'>('loading')
   const [activeTab, setActiveTab] = useState('domain')
   const [hoveredCard, setHoveredCard] = useState<number | null>(null)
-  const [isClient, setIsClient] = useState(false)
 
+  // Vérifier backend /health
   useEffect(() => {
     setMounted(true)
     setIsClient(true)
+
+    async function checkBackend() {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`)
+        if (res.ok) setBackendStatus('ok')
+        else setBackendStatus('error')
+      } catch {
+        setBackendStatus('error')
+      }
+    }
+    checkBackend()
   }, [])
 
-  const fadeInUp = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.6, ease: easeOut } // ✅ fonction importée
-    }
+  // Loader ou erreur
+  if (backendStatus === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 flex-col">
+        <motion.div
+          className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full"
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+        />
+        <span className="mt-4 text-blue-600 dark:text-blue-400 font-medium text-lg">Connexion au serveur...</span>
+      </div>
+    )
   }
 
-
-  const staggerContainer = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.2
-      }
-    },
-    transition: { duration: 0.3, ease: easeInOut }
-
-
+  if (backendStatus === 'error') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 text-center px-4">
+        <p className="text-red-600 dark:text-red-400 font-semibold text-xl mb-4">
+          Impossible de se connecter au serveur de données.
+        </p>
+        <p className="text-gray-700 dark:text-gray-300">
+          Vérifiez votre connexion ou réessayez plus tard.
+        </p>
+      </div>
+    )
   }
 
-  const cardHover = {
-    rest: { scale: 1, y: 0 },
-    hover: {
-      scale: 1.02,
-      y: -8,
-      transition: { duration: 0.3, ease: easeInOut }
+  // Animations
+  const fadeInUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: easeOut } } }
+  const staggerContainer = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.2 } }, transition: { duration: 0.3, ease: easeInOut } }
+  const cardHover = { rest: { scale: 1, y: 0 }, hover: { scale: 1.02, y: -8, transition: { duration: 0.3, ease: easeInOut } } }
 
-
-    }
-  }
-
-  // Données constantes (pas d'aléatoire côté serveur)
+  // Données constantes
   const statsData = [
     { value: "5K+", label: "Étudiants accompagnés", icon: Users },
     { value: "98%", label: "Satisfaction", icon: Check },
     { value: "48h", label: "Temps moyen", icon: Clock },
     { value: "100%", label: "Personnalisation", icon: Target }
   ]
-
   const tabsData = [
     { id: 'domain', label: 'Votre domaine', icon: BookOpen },
     { id: 'level', label: 'Votre niveau', icon: GraduationCap },
     { id: 'interests', label: 'Vos intérêts', icon: Target },
     { id: 'timeline', label: 'Votre temps', icon: Clock }
   ]
-
   const stepsData = [
-    {
-      step: "1",
-      title: "On fait connaissance",
-      description: "Parlez-nous de vous, de vos passions et de vos aspirations",
-      icon: MessageSquare
-    },
-    {
-      step: "2",
-      title: "On affine ensemble",
-      description: "Nous discutons de vos critères pour mieux vous comprendre",
-      icon: Filter
-    },
-    {
-      step: "3",
-      title: "On découvre des pistes",
-      description: "Recevez des suggestions qui vous ressemblent vraiment",
-      icon: Lightbulb
-    },
-    {
-      step: "4",
-      title: "On valide avec confiance",
-      description: "Vous choisissez en étant parfaitement éclairé",
-      icon: Check
-    }
+    { step: "1", title: "On fait connaissance", description: "Parlez-nous de vous, de vos passions et de vos aspirations", icon: MessageSquare },
+    { step: "2", title: "On affine ensemble", description: "Nous discutons de vos critères pour mieux vous comprendre", icon: Filter },
+    { step: "3", title: "On découvre des pistes", description: "Recevez des suggestions qui vous ressemblent vraiment", icon: Lightbulb },
+    { step: "4", title: "On valide avec confiance", description: "Vous choisissez en étant parfaitement éclairé", icon: Check }
   ]
 
+  // Page principale
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300 overflow-hidden">
       <Header />
@@ -149,93 +126,37 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 md:py-36">
         <div className="absolute inset-0 bg-gradient-to-b from-blue-50/20 to-white/50 dark:from-blue-950/10 dark:to-gray-900/50"></div>
-
         <div className="container relative mx-auto px-4 sm:px-6">
-          <div className="max-w-4xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="text-center mb-16"
-            >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-                className="inline-flex items-center gap-2 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-full mb-8"
-              >
+          <div className="max-w-4xl mx-auto text-center">
+            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: "easeOut" }} className="mb-16">
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2, type: "spring", stiffness: 200 }} className="inline-flex items-center gap-2 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-full mb-8">
                 <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  Votre parcours commence ici
-                </span>
+                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Votre parcours commence ici</span>
               </motion.div>
-
-              <motion.h1
-                variants={fadeInUp}
-                initial="hidden"
-                animate="visible"
-                className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight"
-              >
+              <motion.h1 variants={fadeInUp} initial="hidden" animate="visible" className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
                 Trouvez le sujet qui <span className="text-blue-600 dark:text-blue-400">vous correspond</span>
               </motion.h1>
-
-              <motion.p
-                variants={fadeInUp}
-                className="text-xl text-gray-600 dark:text-gray-300 mb-10 max-w-2xl mx-auto leading-relaxed"
-              >
+              <motion.p variants={fadeInUp} className="text-xl text-gray-600 dark:text-gray-300 mb-10 max-w-2xl mx-auto leading-relaxed">
                 Nous comprenons que chaque étudiant est unique. Notre système vous guide pas à pas vers le sujet qui correspond à votre personnalité et vos ambitions.
               </motion.p>
 
-              <motion.div
-                variants={fadeInUp}
-                className="flex flex-col sm:flex-row gap-4 justify-center mb-16"
-              >
-                <Link
-                  href="/register"
-                  className="relative px-8 py-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-3 group overflow-hidden"
-                >
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600"
-                    initial={{ x: "-100%" }}
-                    whileHover={{ x: "100%" }}
-                    transition={{ duration: 0.6 }}
-                  />
-                  <span className="relative z-10 flex items-center gap-2">
-                    <GraduationCap className="w-5 h-5" />
-                    Commencer mon parcours
-                  </span>
+              <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+                <Link href="/register" className="relative px-8 py-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-3 group overflow-hidden">
+                  <motion.div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600" initial={{ x: "-100%" }} whileHover={{ x: "100%" }} transition={{ duration: 0.6 }} />
+                  <span className="relative z-10 flex items-center gap-2"><GraduationCap className="w-5 h-5" />Commencer mon parcours</span>
                   <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
                 </Link>
-                <Link
-                  href="#criteria"
-                  className="px-8 py-4 border-2 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 flex items-center justify-center gap-2 hover:border-blue-300 dark:hover:border-blue-500"
-                >
-                  <BookOpen className="w-5 h-5" />
-                  Explorer les critères
+                <Link href="#criteria" className="px-8 py-4 border-2 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 flex items-center justify-center gap-2 hover:border-blue-300 dark:hover:border-blue-500">
+                  <BookOpen className="w-5 h-5" />Explorer les critères
                 </Link>
               </motion.div>
             </motion.div>
 
             {/* Stats */}
-            <motion.div
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-              className="grid grid-cols-2 md:grid-cols-4 gap-4"
-            >
+            <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {statsData.map((stat, index) => (
-                <motion.div
-                  key={index}
-                  variants={fadeInUp}
-                  whileHover={{ scale: 1.05 }}
-                  className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center backdrop-blur-sm"
-                >
-                  <motion.div
-                    initial={{ rotate: 0 }}
-                    whileHover={{ rotate: 360 }}
-                    transition={{ duration: 0.6 }}
-                    className="inline-flex p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-4"
-                  >
+                <motion.div key={index} variants={fadeInUp} whileHover={{ scale: 1.05 }} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center backdrop-blur-sm">
+                  <motion.div initial={{ rotate: 0 }} whileHover={{ rotate: 360 }} transition={{ duration: 0.6 }} className="inline-flex p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-4">
                     <stat.icon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                   </motion.div>
                   <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1">{stat.value}</div>
@@ -247,6 +168,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      
       {/* Section Critères */}
       <section id="criteria" className="py-20 bg-gray-50 dark:bg-gray-800/30">
         <div className="container mx-auto px-4 sm:px-6">

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routes import auth, sujets, users, ai,settings
-from dotenv import load_dotenv()
+from dotenv import load_dotenv
 load_dotenv()
 import os
 # Supprimer toutes les tables existantes

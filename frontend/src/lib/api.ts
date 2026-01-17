@@ -1,7 +1,6 @@
 // src/lib/api.ts - VERSION COMPLÈTE CORRIGÉE
-// const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL 
 // ========== TYPES DÉFINIS EN PREMIER ==========
 
 export interface User {

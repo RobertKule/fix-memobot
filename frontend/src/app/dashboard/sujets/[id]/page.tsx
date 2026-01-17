@@ -65,19 +65,10 @@ export default function SujetDetailPage() {
       setError(null)
       
       const response = await api.getSujet(sujetId)
-      
-      // La réponse API retourne { sujet: {...}, analyse: {...} }
-      if (response && response.sujet) {
-        setSujet(response.sujet)
-        
-        // Si l'analyse est déjà incluse dans la réponse
-        if (response.analyse) {
-          setAiAnalysis(response.analyse)
-        }
-      } else {
-        // Fallback si la structure est différente
-        setSujet(response as any)
-      }
+
+// response EST le sujet
+setSujet(response)
+
       
       // Simuler des états initiaux
       setIsLiked(Math.random() > 0.5)

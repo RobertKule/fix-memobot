@@ -5,17 +5,19 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { 
-  Mail, 
-  Lock, 
-  ArrowRight, 
-  Eye, 
-  EyeOff, 
-  GraduationCap, 
+import {
+  Mail,
+  Lock,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  GraduationCap,
   Sparkles,
   AlertCircle,
   Loader2
 } from 'lucide-react'
+
+import type { Variants } from 'framer-motion'
 import { useAuth } from '@/contexts/AuthContext'
 import ThemeToggle from '@/components/ui/theme-toggle'
 
@@ -31,7 +33,7 @@ export default function LoginPage() {
   })
   const [isRedirecting, setIsRedirecting] = useState(false)
 
-  
+
 
   // Effet pour charger l'email mémorisé
   useEffect(() => {
@@ -50,7 +52,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    
+
     if (!formData.email || !formData.password) {
       setError('Veuillez remplir tous les champs')
       return
@@ -65,9 +67,9 @@ export default function LoginPage() {
       } else {
         localStorage.removeItem('remembered_email')
       }
-      
-   
-      
+
+
+
     } catch (err: any) {
       setError(err.message || 'Échec de la connexion. Veuillez vérifier vos identifiants.')
     }
@@ -105,14 +107,19 @@ export default function LoginPage() {
     }))
   }
 
-  const fadeInUp = {
+
+  const fadeInUp: Variants = {
     hidden: { opacity: 0, y: 20 },
-    visible: { 
-      opacity: 1, 
+    visible: {
+      opacity: 1,
       y: 0,
-      transition: { duration: 0.5, ease: "easeOut" }
+      transition: {
+        duration: 0.5,
+        ease: [0.16, 1, 0.3, 1] // easeOut officiel
+      }
     }
   }
+
 
 
   return (
@@ -122,21 +129,21 @@ export default function LoginPage() {
           <ThemeToggle />
         </div>
 
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.4, ease: "easeOut" }}
           className="w-full max-w-md"
         >
           {/* En-tête */}
-          <motion.div 
+          <motion.div
             variants={fadeInUp}
             initial="hidden"
             animate="visible"
             className="text-center mb-8"
           >
             <Link href="/" className="inline-flex items-center gap-3 mb-6 group">
-              <motion.div 
+              <motion.div
                 initial={{ rotate: -180, scale: 0 }}
                 animate={{ rotate: 0, scale: 1 }}
                 transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
@@ -206,8 +213,8 @@ export default function LoginPage() {
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Mot de passe
                   </label>
-                  <Link 
-                    href="/forgot-password" 
+                  <Link
+                    href="/forgot-password"
                     className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors hover:underline"
                   >
                     Mot de passe oublié ?
@@ -290,8 +297,8 @@ export default function LoginPage() {
               <div className="text-center pt-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   Pas encore de compte ?{' '}
-                  <Link 
-                    href="/register" 
+                  <Link
+                    href="/register"
                     className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 transition-colors hover:underline"
                   >
                     S'inscrire gratuitement

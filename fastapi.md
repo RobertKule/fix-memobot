@@ -246,7 +246,7 @@ Sans écrire de code :
 - Client → navigateur, mobile, frontend
 - Serveur → FastAPI, Django, backend
 
-📌 HTTP fonctionne par **requête / réponse**
+📌 HTTP fonctionne par **requête / message**
 
 ---
 

@@ -223,7 +223,7 @@ class AIRequest(BaseModel):
 
 class AIResponse(BaseModel):
     question: str
-    réponse: str
+    message: str
     suggestions: List[str] = []
 
 

@@ -142,7 +142,7 @@ export default function ChatPage() {
         const botMessage: Message = {
           id: Date.now() + 1,
           sender: 'bot',
-          content: response.réponse || "Je n'ai pas pu générer de réponse pour le moment.",
+          content: response.message || "Je n'ai pas pu générer de message pour le moment.",
           time: getCurrentTime()
         }
 

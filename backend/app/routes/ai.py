@@ -354,10 +354,10 @@ async def chat_with_ai(
         - Un problème spécifique → Donne des solutions étape par étape
         """
         
-        # Obtenir la réponse de l'IA
-        réponse = répondre_question(request.message, full_context)
+        # Obtenir la message de l'IA
+        message = répondre_question(request.message, full_context)
         
-        # Analyser la réponse pour extraire des suggestions
+        # Analyser la message pour extraire des suggestions
         suggestions = []
         action_buttons = []
         
@@ -395,11 +395,11 @@ async def chat_with_ai(
             db,
             user_id=current_user.id,
             role="assistant",
-            content=réponse
+            content=message
         )
         
         return {
-            "message": réponse,
+            "message": message,
             "suggestions": suggestions,
             "actions": action_buttons,
             "timestamp": datetime.utcnow().isoformat()
@@ -407,7 +407,7 @@ async def chat_with_ai(
         
     except Exception as e:
         print(f"Erreur dans chat_with_ai: {e}")
-        # Réponse de secours
+        # message de secours
         return {
             "message": "Je suis désolé, je rencontre des difficultés techniques. Pouvez-vous reformuler votre question ? En attendant, voici quelques conseils généraux:\n\n1. Précisez votre domaine d'étude\n2. Décrivez vos intérêts de recherche\n3. Mentionnez votre niveau académique\n\nCela m'aidera à mieux vous assister !",
             "suggestions": ["Réessayez votre question", "Consultez les FAQs", "Contactez un enseignant"],
@@ -453,12 +453,12 @@ async def ask_question(
         # Construire le contexte final
         context = "\n".join(context_parts) if context_parts else ""
         
-        # Obtenir la réponse de l'IA avec un prompt plus simple
-        réponse = répondre_question(request.question, context)
+        # Obtenir la message de l'IA avec un prompt plus simple
+        message = répondre_question(request.question, context)
         
-        # Nettoyer la réponse (enlever les répétitions de prompt)
-        if "**RÉPONSE:**" in réponse:
-            réponse = réponse.split("**RÉPONSE:**")[-1].strip()
+        # Nettoyer la message (enlever les répétitions de prompt)
+        if "**RÉPONSE:**" in message:
+            message = message.split("**RÉPONSE:**")[-1].strip()
         
         # Extraire des suggestions basées sur le type de question
         suggestions = []
@@ -489,12 +489,12 @@ async def ask_question(
             db,
             user_id=current_user.id,
             role="assistant",
-            content=réponse
+            content=message
         )
         
         return schemas.AIResponse(
             question=request.question,
-            réponse=réponse,
+            message=message,
             suggestions=suggestions
         )
         
@@ -502,7 +502,7 @@ async def ask_question(
         print(f"Erreur dans ask_question: {e}")
         return schemas.AIResponse(
             question=request.question,
-            réponse="Je suis désolé, je rencontre des difficultés techniques. Pouvez-vous reformuler votre question ?",
+            message="Je suis désolé, je rencontre des difficultés techniques. Pouvez-vous reformuler votre question ?",
             suggestions=["Réessayez votre question", "Consultez les FAQs", "Contactez un enseignant"]
         )
 
@@ -582,7 +582,7 @@ async def analyze_subject(
         )
         crud.create_user_history(db, history_data)
         
-        # Formater la réponse selon le schéma
+        # Formater la message selon le schéma
         return {
             "pertinence": analysis.get("pertinence", 75),
             "points_forts": analysis.get("points_forts", []),
@@ -627,12 +627,12 @@ async def ask_question_public(
         # Construire un prompt simple
         context = "Utilisateur non connecté posant une question sur un sujet de mémoire."
         
-        # Obtenir la réponse de l'IA
-        réponse = répondre_question(request.question, context)
+        # Obtenir la message de l'IA
+        message = répondre_question(request.question, context)
         
-        # Nettoyer la réponse
-        if "**RÉPONSE:**" in réponse:
-            réponse = réponse.split("**RÉPONSE:**")[-1].strip()
+        # Nettoyer la message
+        if "**RÉPONSE:**" in message:
+            message = message.split("**RÉPONSE:**")[-1].strip()
         
         # Suggestions génériques pour les non-connectés
         suggestions = [
@@ -648,7 +648,7 @@ async def ask_question_public(
         
         return schemas.AIResponse(
             question=request.question,
-            réponse=réponse,
+            message=message,
             suggestions=suggestions
         )
         
@@ -656,7 +656,7 @@ async def ask_question_public(
         print(f"Erreur dans ask_question_public: {e}")
         return schemas.AIResponse(
             question=request.question,
-            réponse="Je suis désolé, je rencontre des difficultés techniques. Veuillez réessayer.",
+            message="Je suis désolé, je rencontre des difficultés techniques. Veuillez réessayer.",
             suggestions=[
                 "Réessayez votre question",
                 "Contactez-nous si le problème persiste"

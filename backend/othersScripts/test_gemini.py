@@ -17,10 +17,10 @@ if __name__ == "__main__":
     if test_gemini():
         print("\n✅ Connexion réussie!")
         
-        # Test de réponse à une question
+        # Test de message à une question
         print("\n🤖 Test de question...")
         response = répondre_question("Quels sont les critères d'acceptation d'un sujet de mémoire?")
-        print(f"Réponse: {response['réponse'][:200]}...")
+        print(f"Réponse: {response['message'][:200]}...")
         
         if response['suggestions']:
             print(f"Suggestions: {response['suggestions']}")

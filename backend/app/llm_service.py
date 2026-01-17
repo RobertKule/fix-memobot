@@ -171,7 +171,7 @@ def recommander_sujets_llm(
             "sujets_text": sujets_text
         })
         
-        # Parser le JSON de la réponse
+        # Parser le JSON de la message
         try:
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
             if json_match:
@@ -203,7 +203,7 @@ def répondre_question(question: str, contexte: str = None) -> str:
     {contexte}
     
     **INSTRUCTIONS:**
-    1. Donne une réponse claire, concise et utile
+    1. Donne une message claire, concise et utile
     2. Propose des conseils pratiques si pertinent
     3. Sois encourageant et professionnel
     4. Réponds en français de manière naturelle
@@ -219,15 +219,15 @@ def répondre_question(question: str, contexte: str = None) -> str:
         
         contexte_text = f"**CONTEXTE SUPPLÉMENTAIRE:**\n{contexte}" if contexte else ""
         
-        réponse = chain.invoke({
+        message = chain.invoke({
             "question": question,
             "contexte": contexte_text
         })
         
-        return réponse
+        return message
         
     except Exception as e:
-        print(f"⚠️ Erreur réponse LangChain: {e}")
+        print(f"⚠️ Erreur message LangChain: {e}")
         return f"Je ne peux pas répondre pour le moment. Veuillez réessayer plus tard."
 
 def générer_sujets_llm(params: Dict[str, Any], count: int) -> List[Dict[str, Any]]:

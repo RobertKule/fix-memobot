@@ -45,6 +45,10 @@ export interface UserStats {
   active_days: number;
   last_active: string;
 }
+export interface SujetDetailResponse {
+  sujet: Sujet
+  analyse?: AIAnalysisResponse
+}
 
 export interface Sujet {
   id: number;
@@ -75,9 +79,11 @@ export interface RecommendedSujet {
 
 export interface AIResponse {
   question: string;
-  réponse: string;
+  message: string;
   suggestions: string[];
 }
+
+
 
 
 export interface GeneratedSubject {
@@ -163,9 +169,26 @@ private async request<T>(
   });
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
+  'Content-Type': 'application/json',
+};
+
+// Normaliser les headers
+if (options.headers) {
+  if (options.headers instanceof Headers) {
+    options.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+  } else if (Array.isArray(options.headers)) {
+    options.headers.forEach(([key, value]) => {
+      headers[key] = value;
+    });
+  } else if (typeof options.headers === 'object') {
+    Object.assign(headers, options.headers);
+  }
+}
+
+// Ajouter le token si présent
+
 
   // Récupérer le token depuis localStorage seulement côté client
   let token: string | null = null;
@@ -201,7 +224,7 @@ private async request<T>(
         localStorage.removeItem('user_data');
       }
       
-      // Retourner une réponse d'erreur structurée au lieu de lancer une exception
+      // Retourner une message d'erreur structurée au lieu de lancer une exception
       const errorData = await response.json().catch(() => ({ 
         detail: 'Session expirée. Veuillez vous reconnecter.' 
       }));
@@ -295,8 +318,13 @@ private async request<T>(
     limit?: number;
   }) {
     const query = new URLSearchParams(
-      params ? Object.entries(params).filter(([_, v]) => v !== undefined) : []
-    ).toString();
+  params
+    ? Object.entries(params)
+        .filter(([_, v]) => v !== undefined)
+        .map(([k, v]) => [k, String(v)])  // <-- important, tout en string
+    : []
+).toString();
+
 
     // Ajoutez "?" seulement si des paramètres existent
     const endpoint = query ? `/sujets?${query}` : '/sujets';
@@ -567,6 +595,19 @@ async analyzeSubjectPublic(data: {
       };
     }
   }
+  
+
+ // ========== CHAT IA (conversationnel) ==========
+async chatWithAI(data: {
+  message: string
+  context?: string
+}): Promise<AIResponse> {
+  return this.request<AIResponse>('/ai/chat', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
 
   async updatePreferences(preferences: any): Promise<any> {
     return this.request('/settings/preferences', {

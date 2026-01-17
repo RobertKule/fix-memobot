@@ -3,6 +3,8 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { easeIn, easeOut, easeInOut } from "framer-motion"
+
 import { ArrowRight, GraduationCap, BookOpen, Filter, Target, Clock, Check, Users, Shield, Lightbulb, Sparkles, MessageSquare } from 'lucide-react'
 import Header from '@/components/layout/header'
 import Footer from '@/components/layout/footer'
@@ -32,16 +34,16 @@ const AnimatedParticles = () => {
         <motion.div
           key={particle.id}
           className="absolute w-1 h-1 bg-white/20 rounded-full"
-          initial={{ 
-            x: `${particle.x}%`, 
+          initial={{
+            x: `${particle.x}%`,
             y: `${particle.y}%`,
             opacity: 0
           }}
-          animate={{ 
+          animate={{
             y: [null, '-100%'],
             opacity: [0, 1, 0]
           }}
-          transition={{ 
+          transition={{
             duration: Math.random() * 3 + 2,
             repeat: Infinity,
             delay: Math.random() * 2
@@ -65,12 +67,13 @@ export default function HomePage() {
 
   const fadeInUp = {
     hidden: { opacity: 0, y: 20 },
-    visible: { 
-      opacity: 1, 
+    visible: {
+      opacity: 1,
       y: 0,
-      transition: { duration: 0.6, ease: "easeOut" }
+      transition: { duration: 0.6, ease: easeOut } // ✅ fonction importée
     }
   }
+
 
   const staggerContainer = {
     hidden: { opacity: 0 },
@@ -80,15 +83,20 @@ export default function HomePage() {
         staggerChildren: 0.1,
         delayChildren: 0.2
       }
-    }
+    },
+    transition: { duration: 0.3, ease: easeInOut }
+
+
   }
 
   const cardHover = {
     rest: { scale: 1, y: 0 },
-    hover: { 
-      scale: 1.02, 
+    hover: {
+      scale: 1.02,
       y: -8,
-      transition: { duration: 0.3, ease: "easeInOut" }
+      transition: { duration: 0.3, ease: easeInOut }
+
+
     }
   }
 
@@ -137,20 +145,20 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300 overflow-hidden">
       <Header />
-      
+
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 md:py-36">
         <div className="absolute inset-0 bg-gradient-to-b from-blue-50/20 to-white/50 dark:from-blue-950/10 dark:to-gray-900/50"></div>
-        
+
         <div className="container relative mx-auto px-4 sm:px-6">
           <div className="max-w-4xl mx-auto">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
               className="text-center mb-16"
             >
-              <motion.div 
+              <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
@@ -161,8 +169,8 @@ export default function HomePage() {
                   Votre parcours commence ici
                 </span>
               </motion.div>
-              
-              <motion.h1 
+
+              <motion.h1
                 variants={fadeInUp}
                 initial="hidden"
                 animate="visible"
@@ -170,19 +178,19 @@ export default function HomePage() {
               >
                 Trouvez le sujet qui <span className="text-blue-600 dark:text-blue-400">vous correspond</span>
               </motion.h1>
-              
-              <motion.p 
+
+              <motion.p
                 variants={fadeInUp}
                 className="text-xl text-gray-600 dark:text-gray-300 mb-10 max-w-2xl mx-auto leading-relaxed"
               >
                 Nous comprenons que chaque étudiant est unique. Notre système vous guide pas à pas vers le sujet qui correspond à votre personnalité et vos ambitions.
               </motion.p>
-              
-              <motion.div 
+
+              <motion.div
                 variants={fadeInUp}
                 className="flex flex-col sm:flex-row gap-4 justify-center mb-16"
               >
-                <Link 
+                <Link
                   href="/register"
                   className="relative px-8 py-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-3 group overflow-hidden"
                 >
@@ -198,7 +206,7 @@ export default function HomePage() {
                   </span>
                   <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
                 </Link>
-                <Link 
+                <Link
                   href="#criteria"
                   className="px-8 py-4 border-2 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 flex items-center justify-center gap-2 hover:border-blue-300 dark:hover:border-blue-500"
                 >
@@ -209,20 +217,20 @@ export default function HomePage() {
             </motion.div>
 
             {/* Stats */}
-            <motion.div 
+            <motion.div
               variants={staggerContainer}
               initial="hidden"
               animate="visible"
               className="grid grid-cols-2 md:grid-cols-4 gap-4"
             >
               {statsData.map((stat, index) => (
-                <motion.div 
+                <motion.div
                   key={index}
                   variants={fadeInUp}
                   whileHover={{ scale: 1.05 }}
                   className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center backdrop-blur-sm"
                 >
-                  <motion.div 
+                  <motion.div
                     initial={{ rotate: 0 }}
                     whileHover={{ rotate: 360 }}
                     transition={{ duration: 0.6 }}
@@ -242,14 +250,14 @@ export default function HomePage() {
       {/* Section Critères */}
       <section id="criteria" className="py-20 bg-gray-50 dark:bg-gray-800/30">
         <div className="container mx-auto px-4 sm:px-6">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             className="max-w-4xl mx-auto"
           >
             <div className="text-center mb-12">
-              <motion.h2 
+              <motion.h2
                 initial={{ y: 20 }}
                 whileInView={{ y: 0 }}
                 viewport={{ once: true }}
@@ -257,7 +265,7 @@ export default function HomePage() {
               >
                 Un chemin <span className="text-blue-600 dark:text-blue-400">fait pour vous</span>
               </motion.h2>
-              <motion.p 
+              <motion.p
                 initial={{ y: 20 }}
                 whileInView={{ y: 0 }}
                 viewport={{ once: true }}
@@ -276,11 +284,10 @@ export default function HomePage() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-300 ${
-                    activeTab === tab.id
+                  className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-300 ${activeTab === tab.id
                       ? 'bg-blue-600 text-white'
                       : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
+                    }`}
                 >
                   <tab.icon className="w-4 h-4" />
                   {tab.label}
@@ -356,7 +363,7 @@ export default function HomePage() {
       <section className="py-20">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-5xl mx-auto">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
@@ -372,22 +379,18 @@ export default function HomePage() {
 
             <div className="relative">
               {/* Ligne de progression */}
-              <motion.div 
+              <motion.div
                 initial={{ scaleX: 0 }}
                 whileInView={{ scaleX: 1 }}
                 viewport={{ once: true }}
                 transition={{ duration: 1.5, ease: "easeInOut" }}
                 className="absolute top-1/2 left-0 right-0 h-0.5 bg-blue-200 dark:bg-blue-800 transform -translate-y-1/2 hidden md:block"
               />
-              
+
               <div className="grid md:grid-cols-4 gap-8 relative">
                 {stepsData.map((step, index) => (
                   <motion.div
                     key={index}
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: index * 0.2 }}
                     variants={cardHover}
                     initial="rest"
                     whileHover="hover"
@@ -396,8 +399,8 @@ export default function HomePage() {
                     className="relative"
                   >
                     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-8 text-center relative z-10">
-                      <motion.div 
-                        animate={{ 
+                      <motion.div
+                        animate={{
                           scale: hoveredCard === index ? 1.1 : 1,
                           rotate: hoveredCard === index ? 5 : 0
                         }}
@@ -409,7 +412,7 @@ export default function HomePage() {
                       <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">{step.title}</h3>
                       <p className="text-gray-600 dark:text-gray-400">{step.description}</p>
                     </div>
-                    
+
                     {/* Effet de halo */}
                     {hoveredCard === index && (
                       <motion.div
@@ -430,7 +433,7 @@ export default function HomePage() {
       {/* Section Témoignages */}
       <section className="py-20 bg-gray-50 dark:bg-gray-800/30">
         <div className="container mx-auto px-4 sm:px-6">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
@@ -481,10 +484,10 @@ export default function HomePage() {
                     initial={false}
                     transition={{ duration: 0.3 }}
                   />
-                  
+
                   <div className="relative z-10">
                     <div className="flex items-center mb-6">
-                      <motion.div 
+                      <motion.div
                         whileHover={{ rotate: 360 }}
                         transition={{ duration: 0.6 }}
                         className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center"
@@ -496,7 +499,7 @@ export default function HomePage() {
                         <p className="text-sm text-gray-500 dark:text-gray-400">{testimonial.role}</p>
                       </div>
                     </div>
-                    <motion.p 
+                    <motion.p
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: 0.2 }}
@@ -528,16 +531,16 @@ export default function HomePage() {
             <AnimatedParticles />
           </div>
         )}
-        
+
         <div className="container relative mx-auto px-4 sm:px-6">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
             className="max-w-3xl mx-auto text-center"
           >
-            <motion.div 
+            <motion.div
               initial={{ rotate: -180, scale: 0 }}
               animate={{ rotate: 0, scale: 1 }}
               transition={{ delay: 0.2, type: "spring" }}
@@ -545,8 +548,8 @@ export default function HomePage() {
             >
               <Target className="w-12 h-12 text-white" />
             </motion.div>
-            
-            <motion.h2 
+
+            <motion.h2
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.3 }}
@@ -554,8 +557,8 @@ export default function HomePage() {
             >
               Prêt à écrire <span className="text-yellow-300">votre histoire</span> ?
             </motion.h2>
-            
-            <motion.p 
+
+            <motion.p
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.4 }}
@@ -563,8 +566,8 @@ export default function HomePage() {
             >
               Rejoignez une communauté d'étudiants qui ont trouvé leur voie grâce à un accompagnement humain et personnalisé.
             </motion.p>
-            
-            <motion.div 
+
+            <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.5 }}
@@ -592,7 +595,7 @@ export default function HomePage() {
                   <ArrowRight className="w-5 h-5" />
                 </motion.div>
               </Link>
-              
+
               <Link
                 href="#criteria"
                 className="px-8 py-4 border-2 border-white/30 text-white font-medium rounded-xl hover:bg-white/10 transition-all duration-300 backdrop-blur-sm"
@@ -600,8 +603,8 @@ export default function HomePage() {
                 En savoir plus
               </Link>
             </motion.div>
-            
-            <motion.p 
+
+            <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.6 }}
@@ -614,9 +617,9 @@ export default function HomePage() {
       </section>
 
       <Footer />
-      
+
       <QuickChat />
-      
+
       {mounted && (
         <motion.div
           initial={{ opacity: 0, scale: 0.5 }}

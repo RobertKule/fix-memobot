@@ -125,10 +125,10 @@ export default function QuickChat() {
       await new Promise(resolve => setTimeout(resolve, 500))
       setIsTyping(false)
       
-      // Ajouter réponse de l'IA
+      // Ajouter message de l'IA
       const botMessage: Message = {
         id: Date.now() + 1,
-        text: response.réponse || response.message || "Je n'ai pas pu traiter votre demande. Pourriez-vous reformuler ?",
+        text: response.message || response.message || "Je n'ai pas pu traiter votre demande. Pourriez-vous reformuler ?",
         sender: 'bot',
         timestamp: getCurrentTime()
       }

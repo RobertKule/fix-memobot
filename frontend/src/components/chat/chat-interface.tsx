@@ -93,7 +93,7 @@ export function ChatInterface() {
     setInputValue('')
     setIsLoading(true)
 
-    // Simuler une réponse de l'IA
+    // Simuler une message de l'IA
     setTimeout(() => {
       const aiResponse: MessageType = {
         id: (Date.now() + 1).toString(),

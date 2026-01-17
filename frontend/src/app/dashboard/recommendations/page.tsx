@@ -29,6 +29,12 @@ interface RecommendationFilters {
   limit: number
   query?: string
 }
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  suggestions?: string[]
+  timestamp: Date
+}
 
 // Données statiques
 const suggestedInterests = [
@@ -500,17 +506,25 @@ const saveChosenSubject = useCallback(async (subject: any) => {
         timestamp: new Date()
       }])
 
-      const response = await api.chatWithAI({
-        message: userMessage
-      })
+     const response = await api.chatWithAI({
+  message: userMessage
+})
 
-      setChatHistory(prev => [...prev, {
-        role: 'assistant',
-        content: response.message,
-        suggestions: response.suggestions,
-        actions: response.actions,
-        timestamp: new Date()
-      }])
+
+console.log(response.message)
+
+
+   const aiMessage: ChatMessage = {
+  role: 'assistant',
+  content: response.message,
+  suggestions: response.suggestions,
+  timestamp: new Date()
+}
+
+setChatHistory(prev => [...prev, aiMessage])
+
+
+
 
     } catch (err: any) {
       toast.error('Erreur lors de l\'envoi du message')

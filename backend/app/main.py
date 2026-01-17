@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routes import auth, sujets, users, ai,settings
-
+from dotenv import load_dotenv
+load_dotenv()
+import os
 # Supprimer toutes les tables existantes
 # Base.metadata.drop_all(bind=engine)
 
@@ -18,7 +20,11 @@ app = FastAPI(
 # Configurer CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", 
+                   "http://127.0.0.1:3000",
+                    "https://memobot-frontend.vercel.app",
+                    "https://memobot-yh22.onrender.com"
+                ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

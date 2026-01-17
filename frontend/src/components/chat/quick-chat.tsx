@@ -26,15 +26,15 @@ export default function QuickChat() {
   const [isOpen, setIsOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<Message[]>([
-    { 
-      id: 1, 
-      text: "👋 Bonjour ! Je suis MemoBot, votre assistant pour trouver le sujet de mémoire parfait.\n\nJe peux vous aider à :\n• Explorer des idées de sujets\n• Affiner votre problématique\n• Choisir une méthodologie\n• Structurer votre mémoire", 
+    {
+      id: 1,
+      text: "👋 Bonjour ! Je suis MemoBot, votre assistant pour trouver le sujet de mémoire parfait.\n\nJe peux vous aider à :\n• Explorer des idées de sujets\n• Affiner votre problématique\n• Choisir une méthodologie\n• Structurer votre mémoire",
       sender: 'bot',
       timestamp: getCurrentTime()
     },
-    { 
-      id: 2, 
-      text: "💡 Essayez une de ces questions ou posez-moi votre propre question !", 
+    {
+      id: 2,
+      text: "💡 Essayez une de ces questions ou posez-moi votre propre question !",
       sender: 'bot',
       timestamp: getCurrentTime()
     }
@@ -43,7 +43,7 @@ export default function QuickChat() {
   const [isTyping, setIsTyping] = useState(false)
   const [showChatBubble, setShowChatBubble] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  
+
   // Utilisez useAuth pour vérifier si l'utilisateur est connecté
   const { user } = useAuth?.() || { user: null }
 
@@ -58,7 +58,7 @@ export default function QuickChat() {
       const timer = setTimeout(() => {
         setShowChatBubble(false)
       }, 5000)
-      
+
       return () => clearTimeout(timer)
     }
   }, [showChatBubble])
@@ -78,12 +78,12 @@ export default function QuickChat() {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) setIsOpen(false)
     }
-    
+
     if (isOpen) {
       document.addEventListener('keydown', handleEscape)
       document.body.style.overflow = 'hidden'
     }
-    
+
     return () => {
       document.removeEventListener('keydown', handleEscape)
       document.body.style.overflow = 'unset'
@@ -94,7 +94,7 @@ export default function QuickChat() {
   const handleSend = useCallback(async (text?: string) => {
     const messageToSend = text || message.trim()
     if (!messageToSend || isLoading) return
-    
+
     // Ajouter message utilisateur
     const userMessage: Message = {
       id: Date.now(),
@@ -102,11 +102,11 @@ export default function QuickChat() {
       sender: 'user',
       timestamp: getCurrentTime()
     }
-    
+
     setMessages(prev => [...prev, userMessage])
-    
+
     if (!text) setMessage('') // Ne pas effacer si c'est une suggestion
-    
+
     setIsLoading(true)
     setIsTyping(true)
 
@@ -120,11 +120,11 @@ export default function QuickChat() {
         // Utilisateur non connecté - utiliser l'API publique
         response = await api.askAIPublic(messageToSend)
       }
-      
+
       // Simulation de frappe
       await new Promise(resolve => setTimeout(resolve, 500))
       setIsTyping(false)
-      
+
       // Ajouter message de l'IA
       const botMessage: Message = {
         id: Date.now() + 1,
@@ -132,20 +132,20 @@ export default function QuickChat() {
         sender: 'bot',
         timestamp: getCurrentTime()
       }
-      
+
       setMessages(prev => [...prev, botMessage])
-      
+
     } catch (error) {
       console.error('Erreur API:', error)
       setIsTyping(false)
-      
+
       const errorMessage: Message = {
         id: Date.now() + 1,
         text: "Désolé, je rencontre une difficulté technique. Veuillez réessayer.",
         sender: 'bot',
         timestamp: getCurrentTime()
       }
-      
+
       setMessages(prev => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
@@ -196,14 +196,14 @@ export default function QuickChat() {
         >
           {/* Effet de halo pulsant */}
           <div className="absolute inset-0 rounded-full bg-blue-500 opacity-20 animate-ping-slow"></div>
-          
+
           {/* Icône du chat avec effet de brillance */}
           <div className="relative z-10">
             <MessageSquare className="w-6 h-6" />
             {/* Point vert indiquant que l'IA est active */}
             <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse ring-2 ring-white"></div>
           </div>
-          
+
           {/* Texte au survol */}
           <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg pointer-events-none">
             <span className="flex items-center gap-1">
@@ -211,7 +211,7 @@ export default function QuickChat() {
               Assistant IA MemoBot
             </span>
           </span>
-          
+
           {/* Flèche qui rebondit en permanence */}
           <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
             <ChevronUp className="w-4 h-4 text-blue-600 animate-bounce-slow" />
@@ -221,19 +221,19 @@ export default function QuickChat() {
 
       {/* Modal de chat avec bordure animée */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
           onClick={handleBackgroundClick}
         >
           {/* Conteneur avec bordure animée (gradient qui se déplace) */}
           <div className="relative p-[3px] rounded-3xl bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 animate-border-spin">
-            
+
             {/* Contenu du modal */}
-            <div 
+            <div
               className="relative bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col overflow-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              
+
               {/* En-tête */}
               <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-900">
                 <div className="flex items-center gap-3">
@@ -271,11 +271,11 @@ export default function QuickChat() {
                         <div className={`rounded-2xl px-4 py-3 ${msg.sender === 'user'
                           ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-br-none'
                           : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
-                        }`}>
+                          }`}>
                           <p className="whitespace-pre-wrap">{msg.text}</p>
                         </div>
-                        <div className={`mt-1 text-xs ${msg.sender === 'user' 
-                          ? 'text-gray-500 text-right' 
+                        <div className={`mt-1 text-xs ${msg.sender === 'user'
+                          ? 'text-gray-500 text-right'
                           : 'text-gray-400 text-left'}`}>
                           {msg.timestamp}
                         </div>
@@ -365,7 +365,7 @@ export default function QuickChat() {
                           handleSend()
                         }
                       }}
-                      placeholder={user 
+                      placeholder={user
                         ? "Posez votre question sur votre mémoire..."
                         : "Posez votre question (ex: idées de sujets, méthodologie...)"
                       }

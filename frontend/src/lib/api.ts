@@ -156,119 +156,119 @@ export interface Config {
 
 // ========== CLASSE API SERVICE ==========
 class ApiService {
-private async request<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
-  
-  console.log('🔄 API Request:', {
-    url,
-    endpoint,
-    method: options.method || 'GET'
-  });
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${API_BASE_URL}${endpoint}`;
 
-  const headers: Record<string, string> = {
-  'Content-Type': 'application/json',
-};
-
-// Normaliser les headers
-if (options.headers) {
-  if (options.headers instanceof Headers) {
-    options.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
-  } else if (Array.isArray(options.headers)) {
-    options.headers.forEach(([key, value]) => {
-      headers[key] = value;
-    });
-  } else if (typeof options.headers === 'object') {
-    Object.assign(headers, options.headers);
-  }
-}
-
-// Ajouter le token si présent
-
-
-  // Récupérer le token depuis localStorage seulement côté client
-  let token: string | null = null;
-  if (typeof window !== 'undefined') {
-    token = localStorage.getItem('access_token');
-    console.log('Token available:', !!token);
-  }
-
-  if (token && !endpoint.includes('/auth/login')) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers,
-      credentials: 'include',
-    });
-
-    console.log('📡 API Response:', {
+    console.log('🔄 API Request:', {
       url,
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok
+      endpoint,
+      method: options.method || 'GET'
     });
 
-    // Si erreur 401, ne pas lancer d'exception immédiatement
-    // On va laisser la logique de gestion à l'appelant
-    if (response.status === 401 && !endpoint.includes('/auth/login')) {
-      console.log('Unauthorized, removing token');
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user_data');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Normaliser les headers
+    if (options.headers) {
+      if (options.headers instanceof Headers) {
+        options.headers.forEach((value, key) => {
+          headers[key] = value;
+        });
+      } else if (Array.isArray(options.headers)) {
+        options.headers.forEach(([key, value]) => {
+          headers[key] = value;
+        });
+      } else if (typeof options.headers === 'object') {
+        Object.assign(headers, options.headers);
       }
-      
-      // Retourner une message d'erreur structurée au lieu de lancer une exception
-      const errorData = await response.json().catch(() => ({ 
-        detail: 'Session expirée. Veuillez vous reconnecter.' 
-      }));
-      
-      throw {
-        status: 401,
-        message: errorData.detail || 'Session expirée. Veuillez vous reconnecter.',
-        isUnauthorized: true
-      };
     }
 
-    if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-        console.error('❌ API Error Details:', errorData);
-      } catch {
-        const errorText = await response.text();
-        errorData = { detail: errorText || `HTTP ${response.status}: ${response.statusText}` };
-      }
-      
-      const errorMessage = typeof errorData === 'object' 
-        ? (errorData.detail || errorData.message || JSON.stringify(errorData))
-        : errorData;
-      
-      if (endpoint.includes('/auth/login')) {
-        throw new Error(errorMessage || 'Email ou mot de passe incorrect');
-      }
-      
-      throw new Error(errorMessage || `Erreur HTTP ${response.status}`);
+    // Ajouter le token si présent
+
+
+    // Récupérer le token depuis localStorage seulement côté client
+    let token: string | null = null;
+    if (typeof window !== 'undefined') {
+      token = localStorage.getItem('access_token');
+      console.log('Token available:', !!token);
     }
 
-    if (response.status === 204) {
-      return true as T;
+    if (token && !endpoint.includes('/auth/login')) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const data = await response.json();
-    console.log('✅ API Success:', data);
-    return data;
-  } catch (error) {
-    console.error('🔥 API Request failed:', error);
-    throw error;
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include',
+      });
+
+      console.log('📡 API Response:', {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
+      // Si erreur 401, ne pas lancer d'exception immédiatement
+      // On va laisser la logique de gestion à l'appelant
+      if (response.status === 401 && !endpoint.includes('/auth/login')) {
+        console.log('Unauthorized, removing token');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user_data');
+        }
+
+        // Retourner une message d'erreur structurée au lieu de lancer une exception
+        const errorData = await response.json().catch(() => ({
+          detail: 'Session expirée. Veuillez vous reconnecter.'
+        }));
+
+        throw {
+          status: 401,
+          message: errorData.detail || 'Session expirée. Veuillez vous reconnecter.',
+          isUnauthorized: true
+        };
+      }
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+          console.error('❌ API Error Details:', errorData);
+        } catch {
+          const errorText = await response.text();
+          errorData = { detail: errorText || `HTTP ${response.status}: ${response.statusText}` };
+        }
+
+        const errorMessage = typeof errorData === 'object'
+          ? (errorData.detail || errorData.message || JSON.stringify(errorData))
+          : errorData;
+
+        if (endpoint.includes('/auth/login')) {
+          throw new Error(errorMessage || 'Email ou mot de passe incorrect');
+        }
+
+        throw new Error(errorMessage || `Erreur HTTP ${response.status}`);
+      }
+
+      if (response.status === 204) {
+        return true as T;
+      }
+
+      const data = await response.json();
+      console.log('✅ API Success:', data);
+      return data;
+    } catch (error) {
+      console.error('🔥 API Request failed:', error);
+      throw error;
+    }
   }
-}
 
   // ========== AUTH ==========
   async login(email: string, password: string) {
@@ -318,12 +318,12 @@ if (options.headers) {
     limit?: number;
   }) {
     const query = new URLSearchParams(
-  params
-    ? Object.entries(params)
-        .filter(([_, v]) => v !== undefined)
-        .map(([k, v]) => [k, String(v)])  // <-- important, tout en string
-    : []
-).toString();
+      params
+        ? Object.entries(params)
+          .filter(([_, v]) => v !== undefined)
+          .map(([k, v]) => [k, String(v)])  // <-- important, tout en string
+        : []
+    ).toString();
 
 
     // Ajoutez "?" seulement si des paramètres existent
@@ -359,46 +359,46 @@ if (options.headers) {
     });
   }
 
-  
-async saveChosenSubject(data: {
-  titre: string;
-  description: string;
-  keywords: string;
-  domaine: string;
-  niveau: string;
-  faculté: string;
-  problématique: string;
-  méthodologie: string;
-  difficulté: string;
-  durée_estimée: string;
-  interests?: string[];
-}): Promise<any> {
-  // Normaliser la difficulté avant envoi
-  const normalizedData = {
-    ...data,
-    difficulté: data.difficulté.toLowerCase(),
-    keywords: data.keywords || '',
-    méthodologie: data.méthodologie || '',
-    durée_estimée: data.durée_estimée || '6 mois'
-  };
-  
-  return this.request('/ai/save-chosen-subject', {
-    method: 'POST',
-    body: JSON.stringify(normalizedData),
-  });
-}
 
-async generateThreeSubjects(data: {
-  interests: string[];
-  domaine?: string;
-  niveau?: string;
-  faculté?: string;
-}): Promise<{ subjects: any[]; session_id: string }> {
-  return this.request<{ subjects: any[]; session_id: string }>('/ai/generate-three', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+  async saveChosenSubject(data: {
+    titre: string;
+    description: string;
+    keywords: string;
+    domaine: string;
+    niveau: string;
+    faculté: string;
+    problématique: string;
+    méthodologie: string;
+    difficulté: string;
+    durée_estimée: string;
+    interests?: string[];
+  }): Promise<any> {
+    // Normaliser la difficulté avant envoi
+    const normalizedData = {
+      ...data,
+      difficulté: data.difficulté.toLowerCase(),
+      keywords: data.keywords || '',
+      méthodologie: data.méthodologie || '',
+      durée_estimée: data.durée_estimée || '6 mois'
+    };
+
+    return this.request('/ai/save-chosen-subject', {
+      method: 'POST',
+      body: JSON.stringify(normalizedData),
+    });
+  }
+
+  async generateThreeSubjects(data: {
+    interests: string[];
+    domaine?: string;
+    niveau?: string;
+    faculté?: string;
+  }): Promise<{ subjects: any[]; session_id: string }> {
+    return this.request<{ subjects: any[]; session_id: string }>('/ai/generate-three', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 
   async generateSubjects(data: {
     interests: string[];
@@ -442,29 +442,29 @@ async generateThreeSubjects(data: {
     }>('/ai/tips');
   }
 
-// ========== IA PUBLIQUE (sans authentification) ==========
-async askAIPublic(question: string, context?: string): Promise<AIResponse> {
-  return this.request<AIResponse>('/ai/ask-public', {
-    method: 'POST',
-    body: JSON.stringify({ question, context }),
-  });
-}
+  // ========== IA PUBLIQUE (sans authentification) ==========
+  async askAIPublic(question: string, context?: string): Promise<AIResponse> {
+    return this.request<AIResponse>('/ai/ask-public', {
+      method: 'POST',
+      body: JSON.stringify({ question, context }),
+    });
+  }
 
-async analyzeSubjectPublic(data: {
-  titre: string;
-  description: string;
-  domaine?: string;
-  niveau?: string;
-  faculté?: string;
-  problématique?: string;
-  keywords?: string;
-  context?: string;
-}): Promise<AIAnalysisResponse> {
-  return this.request<AIAnalysisResponse>('/ai/analyze-public', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+  async analyzeSubjectPublic(data: {
+    titre: string;
+    description: string;
+    domaine?: string;
+    niveau?: string;
+    faculté?: string;
+    problématique?: string;
+    keywords?: string;
+    context?: string;
+  }): Promise<AIAnalysisResponse> {
+    return this.request<AIAnalysisResponse>('/ai/analyze-public', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
   // ========== USERS ==========
   async getUserProfile(userId: number): Promise<UserProfile> {
     try {
@@ -595,18 +595,18 @@ async analyzeSubjectPublic(data: {
       };
     }
   }
-  
 
- // ========== CHAT IA (conversationnel) ==========
-async chatWithAI(data: {
-  message: string
-  context?: string
-}): Promise<AIResponse> {
-  return this.request<AIResponse>('/ai/chat', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
+
+  // ========== CHAT IA (conversationnel) ==========
+  async chatWithAI(data: {
+    message: string
+    context?: string
+  }): Promise<AIResponse> {
+    return this.request<AIResponse>('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
 
 
   async updatePreferences(preferences: any): Promise<any> {

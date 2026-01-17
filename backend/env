@@ -1,0 +1,21 @@
+# Database
+DATABASE_URL=postgresql://neondb_owner:npg_5hHlUy3EaAzd@ep-cool-cherry-ac0595v5-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+
+# JWT
+SECRET_KEY=3597430bbd52a3a8c0c0b6dcbf949f82b8c987e9140353b7186cf007d47d13b3
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Admin
+ADMIN_EMAIL=admin@thesis.com
+ADMIN_PASSWORD=admin123
+
+# App
+API_V1_PREFIX=/api/v1
+DEBUG=True
+
+# Gemini API (OBLIGATOIRE)
+GOOGLE_API_KEY=AIzaSyCgDQOmIZrr5kyGITb7VBru1FJUwXBeZBc
+GEMINI_MODEL=gemma-3-1b-it
+GEMINI_TEMPERATURE=0.2
+GEMINI_MAX_TOKENS=1024

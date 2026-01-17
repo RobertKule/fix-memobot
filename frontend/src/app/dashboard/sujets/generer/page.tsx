@@ -3,11 +3,11 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { 
-  Sparkles, 
-  Brain, 
-  Target, 
-  Clock, 
+import {
+  Sparkles,
+  Brain,
+  Target,
+  Clock,
   Zap,
   Copy,
   Download,
@@ -63,7 +63,7 @@ export default function GenerateSubjectsPage() {
 
     try {
       setLoading(true)
-      
+
       const interestsArray = formData.interests
         .split(',')
         .map(interest => interest.trim())
@@ -79,9 +79,9 @@ export default function GenerateSubjectsPage() {
 
       setGeneratedSubjects(generated)
       setSelectedSubject(generated[0] || null)
-      
+
       toast.success(`${generated.length} sujets générés avec succès`)
-      
+
     } catch (error: any) {
       console.error('Error generating subjects:', error)
       toast.error(error.message || 'Erreur lors de la génération')
@@ -102,7 +102,7 @@ export default function GenerateSubjectsPage() {
 
   const handleCopySubject = (subject: GeneratedSubject) => {
     const text = `Titre: ${subject.titre}\nProblématique: ${subject.problématique}\nDescription: ${subject.description}\nMéthodologie: ${subject.methodologie}\nDifficulté: ${subject.difficulté}\nDurée estimée: ${subject.durée_estimée}`
-    
+
     navigator.clipboard.writeText(text)
     toast.success('Sujet copié dans le presse-papier')
   }
@@ -118,7 +118,7 @@ export default function GenerateSubjectsPage() {
       keywords: subject.keywords,
       export_date: new Date().toISOString()
     }
-    
+
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -128,7 +128,7 @@ export default function GenerateSubjectsPage() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    
+
     toast.success('Sujet exporté au format JSON')
   }
 
@@ -179,7 +179,7 @@ export default function GenerateSubjectsPage() {
         <div className="lg:col-span-1">
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 sticky top-24">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Paramètres de génération</h3>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -321,7 +321,7 @@ export default function GenerateSubjectsPage() {
                 {generatedSubjects.map((subject, index) => {
                   const isSelected = selectedSubject?.titre === subject.titre
                   const isSaved = savedSubjects.includes(subject.titre)
-                  
+
                   return (
                     <motion.div
                       key={index}
@@ -329,11 +329,10 @@ export default function GenerateSubjectsPage() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
                       onClick={() => setSelectedSubject(subject)}
-                      className={`cursor-pointer bg-white dark:bg-gray-800 rounded-xl border ${
-                        isSelected 
-                          ? 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20' 
+                      className={`cursor-pointer bg-white dark:bg-gray-800 rounded-xl border ${isSelected
+                          ? 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20'
                           : 'border-gray-200 dark:border-gray-700'
-                      } p-4 hover:shadow-lg transition-all`}
+                        } p-4 hover:shadow-lg transition-all`}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1 min-w-0">
@@ -341,9 +340,8 @@ export default function GenerateSubjectsPage() {
                             {subject.titre}
                           </h4>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                              difficultyColors[subject.difficulté] || 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                            }`}>
+                            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${difficultyColors[subject.difficulté] || 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                              }`}>
                               {subject.difficulté}
                             </span>
                             <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -356,20 +354,19 @@ export default function GenerateSubjectsPage() {
                             e.stopPropagation()
                             handleSaveSubject(subject.titre)
                           }}
-                          className={`p-1.5 rounded-lg ${
-                            isSaved 
-                              ? 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' 
+                          className={`p-1.5 rounded-lg ${isSaved
+                              ? 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
                               : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
-                          }`}
+                            }`}
                         >
                           <Save className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
                         </button>
                       </div>
-                      
+
                       <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
                         {subject.description}
                       </p>
-                      
+
                       <div className="flex flex-wrap gap-1">
                         {subject.keywords.split(',').slice(0, 3).map((keyword, idx) => (
                           <span key={idx} className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs rounded">
@@ -413,11 +410,10 @@ export default function GenerateSubjectsPage() {
                       </button>
                       <button
                         onClick={() => handleSaveSubject(selectedSubject.titre)}
-                        className={`p-2 rounded-lg ${
-                          savedSubjects.includes(selectedSubject.titre)
+                        className={`p-2 rounded-lg ${savedSubjects.includes(selectedSubject.titre)
                             ? 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
                             : 'text-gray-600 dark:text-gray-400 hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
-                        }`}
+                          }`}
                         title={savedSubjects.includes(selectedSubject.titre) ? "Retirer des sauvegardés" : "Sauvegarder"}
                       >
                         <Save className={`w-5 h-5 ${savedSubjects.includes(selectedSubject.titre) ? 'fill-current' : ''}`} />
@@ -432,11 +428,10 @@ export default function GenerateSubjectsPage() {
                         <Target className="w-4 h-4 text-gray-400" />
                         <div>
                           <div className="text-sm text-gray-500 dark:text-gray-400">Difficulté</div>
-                          <div className={`font-medium ${
-                            selectedSubject.difficulté === 'Facile' ? 'text-green-600' :
-                            selectedSubject.difficulté === 'Moyen' ? 'text-yellow-600' :
-                            'text-red-600'
-                          }`}>
+                          <div className={`font-medium ${selectedSubject.difficulté === 'Facile' ? 'text-green-600' :
+                              selectedSubject.difficulté === 'Moyen' ? 'text-yellow-600' :
+                                'text-red-600'
+                            }`}>
                             {selectedSubject.difficulté}
                           </div>
                         </div>

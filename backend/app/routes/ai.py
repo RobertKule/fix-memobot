@@ -1,4 +1,4 @@
-# app/routes/ai.py - NOUVELLE VERSION AMÉLIORÉE
+# app/routes/ai.py 
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from sqlalchemy.orm import Session

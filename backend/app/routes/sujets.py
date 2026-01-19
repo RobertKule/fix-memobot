@@ -1,3 +1,4 @@
+# app/routes/sujets.py
 from app.models import Sujet, User, Feedback, UserPreference
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session

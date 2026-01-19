@@ -1,4 +1,4 @@
-# app/llm_service.py - VERSION COMPLÈTE FONCTIONNELLE
+# app/llm_service.py
 import os
 import json
 import re

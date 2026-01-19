@@ -1,4 +1,24 @@
+# app/routes/users.py
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+    """
+    The code defines various API routes for managing and interacting with subjects, including
+    recommending subjects based on interests with AI, searching for subjects, getting specific subject
+    details with AI analysis, creating new subjects, listing subjects with filters, generating new
+    subjects with AI, submitting feedback on subjects, and retrieving statistics on popular subjects,
+    keywords, and domains.
+    
+    :param request: The `request` parameter in the `recommend_sujets` function is of type
+    `schemas.RecommendationRequest`. It contains the following attributes:
+    :type request: schemas.RecommendationRequest
+    :param db: The `db` parameter in the functions of the FastAPI router represents the database session
+    dependency. It is used to interact with the database within the route functions. The `db` parameter
+    is obtained using the `Depends` function with the `get_db` function, which provides a new database
+    session
+    :type db: Session
+    :param current_user: The `current_user` parameter in the FastAPI route functions represents the
+    currently authenticated user making the request. It is typically obtained from the
+    `get_current_user` dependency, which handles the authentication logic and provides the user object
+    """
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime

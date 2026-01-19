@@ -1,4 +1,4 @@
-# app/recommendation.py (Version ultra-simplifiée)
+# app/recommendation.py 
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from difflib import SequenceMatcher  # Utilise le module standard Python

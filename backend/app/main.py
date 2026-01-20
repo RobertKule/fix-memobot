@@ -2,7 +2,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routes import auth, sujets, users, ai,settings
+from app.routes import auth, sujets, users, ai, settings, stats
+from app.llm_service import build_sujets_vectorstore  # initialisation Chroma
 from dotenv import load_dotenv
 load_dotenv()
 import os
@@ -17,6 +18,21 @@ app = FastAPI(
     description="API pour la recommandation de sujets de mémoire avec IA",
     version="1.0.0"
 )
+
+VECTORDIR = os.path.join(os.path.dirname(__file__), "..", "chroma_sujets")
+
+@app.on_event("startup")
+async def startup_init_vectorstore():
+    """
+    Au démarrage:
+    - vérifier / construire l'index Chroma basé sur Sujet_EtudiantsB.csv + critères du doyen.
+    """
+    try:
+        print("🔎 Initialisation du vecteur store des sujets...")
+        build_sujets_vectorstore(persist_directory=VECTORDIR)
+    except Exception as e:
+        # On ne bloque pas le démarrage si ça échoue, on log juste.
+        print(f"⚠️ Impossible d'initialiser le vecteur store au startup: {e}")
 
 # Configurer CORS
 app.add_middleware(
@@ -38,6 +54,7 @@ app.include_router(sujets.router, prefix="/api/v1/sujets", tags=["sujets"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(ai.router, prefix="/api/v1/ai", tags=["ai"])
 app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"])
+app.include_router(stats.router, prefix="/api/v1") 
 
 @app.get("/")
 def read_root():

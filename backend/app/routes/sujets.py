@@ -90,6 +90,9 @@ async def get_sujet(
         return {"sujet": sujet}
 
 # ========== SUJETS UTILISATEUR ==========
+# app/routes/sujets.py
+from pydantic import ValidationError  # à ajouter si pas présent
+
 @router.get("/user-sujets", response_model=List[schemas.Sujet])
 async def get_user_sujets(
     db: Session = Depends(get_db),
@@ -100,25 +103,43 @@ async def get_user_sujets(
     """
     try:
         print(f"📥 [USER-SUJETS] Requête pour l'utilisateur {current_user.id} - {current_user.email}")
-        
-        # Vérifier si l'utilisateur existe
+
         if not current_user:
             print("❌ [USER-SUJETS] Utilisateur non authentifié")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Non authentifié"
             )
-        
-        # Récupérer les sujets de l'utilisateur
+
         sujets = db.query(Sujet).filter(
             Sujet.user_id == current_user.id,
             Sujet.is_active == True
         ).order_by(Sujet.created_at.desc()).all()
-        
-        print(f"✅ [USER-SUJETS] {len(sujets)} sujets trouvés pour l'utilisateur {current_user.id}")
-        
+
+        if sujets:
+            s = sujets[0]
+            print("🔍 [USER-SUJETS] Sujet DB exemple:", {
+                "id": s.id,
+                "vue_count": s.vue_count,
+                "like_count": s.like_count,
+                "user_id": s.user_id,
+                "type_id": type(s.id).__name__,
+                "type_vue_count": type(s.vue_count).__name__,
+                "type_like_count": type(s.like_count).__name__,
+                "type_user_id": type(s.user_id).__name__,
+                "created_at": s.created_at,
+                "type_created_at": type(s.created_at).__name__,
+            })
+
         return sujets
-        
+
+    except ValidationError as ve:
+        print("❌ [USER-SUJETS] ValidationError lors de la sérialisation vers schemas.Sujet")
+        print(ve.json())  # <--- très important : nous donne le champ exact
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=ve.errors(),
+        )
     except Exception as e:
         print(f"❌ [USER-SUJETS] Erreur détaillée: {e}")
         import traceback
@@ -127,6 +148,7 @@ async def get_user_sujets(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la récupération des sujets: {str(e)}"
         )
+
 
 
 @router.get("/favoris", response_model=List[schemas.Sujet])

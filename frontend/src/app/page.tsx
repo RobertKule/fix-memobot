@@ -1,4 +1,4 @@
-// src/app/page.tsx - Version corrigée (sans erreur d'hydratation)
+// src/app/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -42,32 +42,89 @@ const AnimatedParticles = () => {
   )
 }
 
+type BackendStats = {
+  students_count: number
+  satisfaction_rate: number // 0-100
+  avg_time_hours: number
+  personalization_rate: number // 0-100
+}
+
 export default function HomePage() {
   const [mounted, setMounted] = useState(false)
   const [isClient, setIsClient] = useState(false)
+
+  // état pour le backend réel
   const [backendStatus, setBackendStatus] = useState<'loading' | 'ok' | 'error'>('loading')
+  const [backendMessage, setBackendMessage] = useState<string>('Connexion au serveur, nous préparons les données pour vous...')
+  const [backendStats, setBackendStats] = useState<BackendStats | null>(null)
+
   const [activeTab, setActiveTab] = useState('domain')
   const [hoveredCard, setHoveredCard] = useState<number | null>(null)
 
-  // Vérifier backend /health
+  // Vérifier backend /health avec message de loading optimisé
   useEffect(() => {
     setMounted(true)
     setIsClient(true)
 
-    async function checkBackend() {
+    async function fetchLandingData() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`)
-        if (res.ok) setBackendStatus('ok')
-        else setBackendStatus('error')
+        setBackendStatus('loading')
+        setBackendMessage('Connexion au serveur, nous préparons les données pour vous...')
+
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL
+
+        // 1) Vérifier la santé du backend
+        const healthRes = await fetch(`${baseUrl}/health`)
+
+        if (!healthRes.ok) {
+          setBackendStatus('error')
+          setBackendMessage("Impossible de se connecter au serveur de données. Vérifiez votre connexion ou réessayez plus tard.")
+          return
+        }
+
+        // 2) Récupérer les stats réelles si endpoint dispo, sinon fallback sur valeurs par défaut
+        try {
+          const statsRes = await fetch(`${baseUrl}/stats/landing`)
+          if (statsRes.ok) {
+            const data: BackendStats = await statsRes.json()
+
+            setBackendStats({
+              students_count: data.students_count ?? 5000,
+              satisfaction_rate: data.satisfaction_rate ?? 98,
+              avg_time_hours: data.avg_time_hours ?? 48,
+              personalization_rate: data.personalization_rate ?? 100,
+            })
+          } else {
+            // fallback valeurs par défaut si endpoint non dispo
+            setBackendStats({
+              students_count: 5000,
+              satisfaction_rate: 98,
+              avg_time_hours: 48,
+              personalization_rate: 100,
+            })
+          }
+        } catch {
+          // fallback si erreur réseau / parsing
+          setBackendStats({
+            students_count: 5000,
+            satisfaction_rate: 98,
+            avg_time_hours: 48,
+            personalization_rate: 100,
+          })
+        }
+
+        setBackendStatus('ok')
       } catch {
         setBackendStatus('error')
+        setBackendMessage("Impossible de se connecter au serveur de données. Vérifiez votre connexion ou réessayez plus tard.")
       }
     }
-    checkBackend()
+
+    fetchLandingData()
   }, [])
 
-  // Loader ou erreur
-  if (backendStatus === 'loading') {
+  // Loader ou erreur avec message clair
+  if (backendStatus === 'loading' || !backendStats) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 flex-col overflow-x-hidden">
         <motion.div
@@ -75,7 +132,9 @@ export default function HomePage() {
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
         />
-        <span className="mt-4 text-blue-600 dark:text-blue-400 font-medium text-lg">Connexion au serveur...</span>
+        <span className="mt-4 text-blue-600 dark:text-blue-400 font-medium text-lg">
+          {backendMessage}
+        </span>
       </div>
     )
   }
@@ -86,9 +145,18 @@ export default function HomePage() {
         <p className="text-red-600 dark:text-red-400 font-semibold text-xl mb-4">
           Impossible de se connecter au serveur de données.
         </p>
-        <p className="text-gray-700 dark:text-gray-300">
-          Vérifiez votre connexion ou réessayez plus tard.
+        <p className="text-gray-700 dark:text-gray-300 mb-4">
+          {backendMessage}
         </p>
+        <button
+          onClick={() => {
+            // simple reload pour relancer le check
+            window.location.reload()
+          }}
+          className="px-6 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
+        >
+          Réessayer
+        </button>
       </div>
     )
   }
@@ -98,13 +166,32 @@ export default function HomePage() {
   const staggerContainer = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.2 } }, transition: { duration: 0.3, ease: easeInOut } }
   const cardHover = { rest: { scale: 1, y: 0 }, hover: { scale: 1.02, y: -8, transition: { duration: 0.3, ease: easeInOut } } }
 
-  // Données constantes
+  // Données dynamiques basées sur le backend
   const statsData = [
-    { value: "5K+", label: "Étudiants accompagnés", icon: Users },
-    { value: "98%", label: "Satisfaction", icon: Check },
-    { value: "48h", label: "Temps moyen", icon: Clock },
-    { value: "100%", label: "Personnalisation", icon: Target }
+    {
+      value: backendStats.students_count >= 1000
+        ? `${Math.round(backendStats.students_count / 1000)}K+`
+        : backendStats.students_count.toString(),
+      label: "Étudiants accompagnés",
+      icon: Users
+    },
+    {
+      value: `${Math.round(backendStats.satisfaction_rate)}%`,
+      label: "Satisfaction",
+      icon: Check
+    },
+    {
+      value: `${Math.round(backendStats.avg_time_hours)}h`,
+      label: "Temps moyen",
+      icon: Clock
+    },
+    {
+      value: `${Math.round(backendStats.personalization_rate)}%`,
+      label: "Personnalisation",
+      icon: Target
+    }
   ]
+
   const tabsData = [
     { id: 'domain', label: 'Votre domaine', icon: BookOpen },
     { id: 'level', label: 'Votre niveau', icon: GraduationCap },
@@ -152,7 +239,7 @@ export default function HomePage() {
               </motion.div>
             </motion.div>
 
-            {/* Stats */}
+            {/* Stats (maintenant basées sur backendStats) */}
             <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {statsData.map((stat, index) => (
                 <motion.div key={index} variants={fadeInUp} whileHover={{ scale: 1.05 }} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center backdrop-blur-sm">
@@ -168,7 +255,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      
       {/* Section Critères */}
       <section id="criteria" className="py-20 bg-gray-50 dark:bg-gray-800/30">
         <div className="container mx-auto px-4 sm:px-6">
@@ -194,7 +280,7 @@ export default function HomePage() {
                 transition={{ delay: 0.1 }}
                 className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto"
               >
-                Découvrez comment nos critères s'adaptent à votre profil unique
+                Découvrez comment nos critères s&apos;adaptent à votre profil unique
               </motion.p>
             </div>
 
@@ -207,8 +293,8 @@ export default function HomePage() {
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setActiveTab(tab.id)}
                   className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-300 ${activeTab === tab.id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                 >
                   <tab.icon className="w-4 h-4" />
@@ -233,7 +319,7 @@ export default function HomePage() {
                       <BookOpen className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                     </div>
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                      Votre domaine d'études
+                      Votre domaine d&apos;études
                     </h3>
                     <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-lg mx-auto">
                       Chaque domaine a ses spécificités. Nous les comprenons et adaptons nos recommandations en conséquence.
@@ -486,7 +572,7 @@ export default function HomePage() {
               transition={{ delay: 0.4 }}
               className="text-xl text-blue-100 mb-10 max-w-2xl mx-auto"
             >
-              Rejoignez une communauté d'étudiants qui ont trouvé leur voie grâce à un accompagnement humain et personnalisé.
+              Rejoignez une communauté d&apos;étudiants qui ont trouvé leur voie grâce à un accompagnement humain et personnalisé.
             </motion.p>
 
             <motion.div

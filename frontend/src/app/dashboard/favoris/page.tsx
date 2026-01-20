@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { api, Sujet } from '@/lib/api'
 import { toast } from 'sonner'
 
+
 export default function FavorisPage() {
   const [favoris, setFavoris] = useState<Sujet[]>([])
   const [loading, setLoading] = useState(true)

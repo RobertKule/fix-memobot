@@ -363,7 +363,7 @@ const saveChosenSubject = useCallback(async (subject: any) => {
         niveau: finalFilters.niveau,
         faculté: finalFilters.faculté,
         domaine: finalFilters.domaine,
-        difficulté: finalFilters.difficulté,
+        difficulté: finalFilters.difficulté as 'facile' | 'moyenne' | 'difficile' | undefined,
         limit: finalFilters.limit
       })
 

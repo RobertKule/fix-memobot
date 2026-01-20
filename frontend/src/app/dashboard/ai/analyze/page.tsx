@@ -33,6 +33,44 @@ import {
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
+
+interface Analysis {
+  pertinence: number
+  points_forts: string[]
+  points_faibles: string[]
+  suggestions: string[]
+  recommandations: string[]
+}
+
+// Définir demoAnalysis avec le bon type
+const demoAnalysis: Analysis = {
+  pertinence: 85,
+  points_forts: [
+    'Problématique claire et bien définie',
+    'Domaine d\'étude actuel et pertinent',
+    'Portée de recherche bien délimitée',
+    'Applications pratiques évidentes'
+  ],
+  points_faibles: [
+    'Méthodologie à préciser davantage',
+    'Nécessite des compétences spécifiques en analyse de données',
+    'Accès aux données peut être limité'
+  ],
+  suggestions: [
+    'Ajouter une étude comparative avec d\'autres pays',
+    'Inclure des entretiens avec des professionnels de santé',
+    'Prévoir un volet quantitatif avec questionnaire',
+    'Considérer les différences culturelles dans l\'analyse'
+  ],
+  recommandations: [
+    'Sujet recommandé pour un mémoire de Master',
+    'Potentiel de publication dans des revues spécialisées',
+    'Opportunités de collaboration avec des institutions',
+    'Réel impact sur les politiques universitaires'
+  ]
+}
+
+
 export default function AIAnalyzePage() {
   const [analyzing, setAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<any>(null)
@@ -46,7 +84,7 @@ export default function AIAnalyzePage() {
     keywords: ''
   })
   const [step, setStep] = useState(1)
-  
+
   // États pour les modals
   const [showAnalyzingModal, setShowAnalyzingModal] = useState(false)
   const [showResultsModal, setShowResultsModal] = useState(false)
@@ -69,20 +107,20 @@ export default function AIAnalyzePage() {
     try {
       setAnalyzing(true)
       setShowAnalyzingModal(true)
-      
+
       // Simulation de délai pour l'expérience utilisateur
       await new Promise(resolve => setTimeout(resolve, 1500))
-      
+
       const result = await api.analyzeSubject(sujetData)
       setAnalysis(result)
       setStep(2)
-      
+
       // Fermer le modal d'analyse et ouvrir le modal de résultats
       setShowAnalyzingModal(false)
       setTimeout(() => {
         setShowResultsModal(true)
       }, 300)
-      
+
       toast.success('Analyse terminée avec succès !')
     } catch (error: any) {
       setShowAnalyzingModal(false)
@@ -103,7 +141,7 @@ export default function AIAnalyzePage() {
       problématique: 'Comment l\'usage intensif des réseaux sociaux affecte-t-il la santé mentale des étudiants et quelles solutions peuvent être mises en place ?',
       keywords: 'réseaux sociaux, santé mentale, étudiants, addiction, prévention'
     })
-    
+
     setShowExampleModal(true)
   }
 
@@ -131,7 +169,7 @@ export default function AIAnalyzePage() {
         durée_estimée: '6 mois',
         interests: [sujetData.domaine, ...sujetData.keywords.split(',').map(k => k.trim())]
       })
-      
+
       toast.success('Sujet enregistré dans vos créations !')
       setShowResultsModal(false)
     } catch (error) {
@@ -211,7 +249,7 @@ export default function AIAnalyzePage() {
                     <Brain className="w-10 h-10 text-blue-600" />
                   </div>
                 </div>
-                
+
                 <div className="mt-8 text-center">
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Analyse IA en cours
@@ -219,7 +257,7 @@ export default function AIAnalyzePage() {
                   <p className="text-gray-600 dark:text-gray-400 text-sm">
                     Notre intelligence artificielle examine votre sujet en détail...
                   </p>
-                  
+
                   {/* Points d'analyse */}
                   <div className="mt-6 space-y-2">
                     {[
@@ -318,22 +356,21 @@ export default function AIAnalyzePage() {
                       <div className="text-5xl font-bold text-gray-900 dark:text-white">
                         {analysis?.pertinence || demoAnalysis.pertinence}%
                       </div>
-                      <div className={`px-3 py-1 rounded-full text-sm font-medium absolute -bottom-2 right-0 ${
-                        (analysis?.pertinence || demoAnalysis.pertinence) >= 80 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                      <div className={`px-3 py-1 rounded-full text-sm font-medium absolute -bottom-2 right-0 ${(analysis?.pertinence || demoAnalysis.pertinence) >= 80 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
                         (analysis?.pertinence || demoAnalysis.pertinence) >= 60 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                      }`}>
+                          'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                        }`}>
                         {(analysis?.pertinence || demoAnalysis.pertinence) >= 80 ? 'EXCELLENT' :
-                         (analysis?.pertinence || demoAnalysis.pertinence) >= 60 ? 'BON' : 'À AMÉLIORER'}
+                          (analysis?.pertinence || demoAnalysis.pertinence) >= 60 ? 'BON' : 'À AMÉLIORER'}
                       </div>
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Barre de progression */}
                 <div className="mt-4">
                   <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-1000"
                       style={{ width: `${analysis?.pertinence || demoAnalysis.pertinence}%` }}
                     ></div>
@@ -420,55 +457,54 @@ export default function AIAnalyzePage() {
               <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-900/20 rounded-xl p-5 mb-6">
                 <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Évaluation finale</h4>
                 <p className="text-gray-700 dark:text-gray-300">
-                  {(analysis?.pertinence || demoAnalysis.pertinence) >= 80 
+                  {(analysis?.pertinence || demoAnalysis.pertinence) >= 80
                     ? "🎉 Excellent sujet ! Bien structuré, pertinent et avec un fort potentiel de recherche. Idéal pour un mémoire de qualité."
                     : (analysis?.pertinence || demoAnalysis.pertinence) >= 60
-                    ? "👍 Bon sujet, nécessitant quelques ajustements pour optimiser sa pertinence. Avec les améliorations suggérées, il deviendra excellent."
-                    : "💡 Sujet intéressant mais nécessitant une reformulation et un meilleur cadrage. Suivez nos suggestions pour l'améliorer."}
+                      ? "👍 Bon sujet, nécessitant quelques ajustements pour optimiser sa pertinence. Avec les améliorations suggérées, il deviendra excellent."
+                      : "💡 Sujet intéressant mais nécessitant une reformulation et un meilleur cadrage. Suivez nos suggestions pour l'améliorer."}
                 </p>
               </div>
 
               {/* Actions */}
               <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => {
-                    const report = `
+                <button onClick={() => {
+                  const report = `
 Rapport d'analyse IA - ${sujetData.titre}
 
 📊 SCORE DE PERTINENCE: ${analysis?.pertinence || demoAnalysis.pertinence}%
 
 ✅ POINTS FORTS:
-${(analysis?.points_forts || demoAnalysis.points_forts).map(p => `• ${p}`).join('\n')}
+${(analysis?.points_forts || demoAnalysis.points_forts).map((p: string) => `• ${p}`).join('\n')}
 
 ⚠️ POINTS À AMÉLIORER:
-${(analysis?.points_faibles || demoAnalysis.points_faibles).map(p => `• ${p}`).join('\n')}
+${(analysis?.points_faibles || demoAnalysis.points_faibles).map((p: string) => `• ${p}`).join('\n')}
 
 💡 SUGGESTIONS:
-${(analysis?.suggestions || demoAnalysis.suggestions).map(s => `• ${s}`).join('\n')}
+${(analysis?.suggestions || demoAnalysis.suggestions).map((s: string) => `• ${s}`).join('\n')}
 
 ⭐ RECOMMANDATIONS:
-${(analysis?.recommandations || demoAnalysis.recommandations).map(r => `• ${r}`).join('\n')}
+${(analysis?.recommandations || demoAnalysis.recommandations).map((r: string) => `• ${r}`).join('\n')}
 
 📝 ÉVALUATION FINALE:
-${(analysis?.pertinence || demoAnalysis.pertinence) >= 80 
-  ? "Excellent sujet ! Bien structuré, pertinent et avec un fort potentiel de recherche."
-  : (analysis?.pertinence || demoAnalysis.pertinence) >= 60
-  ? "Bon sujet, nécessitant quelques ajustements pour optimiser sa pertinence."
-  : "Sujet intéressant mais nécessitant une reformulation et un meilleur cadrage."}
+${(analysis?.pertinence || demoAnalysis.pertinence) >= 80
+                      ? "Excellent sujet ! Bien structuré, pertinent et avec un fort potentiel de recherche."
+                      : (analysis?.pertinence || demoAnalysis.pertinence) >= 60
+                        ? "Bon sujet, nécessitant quelques ajustements pour optimiser sa pertinence."
+                        : "Sujet intéressant mais nécessitant une reformulation et un meilleur cadrage."}
 
 ---
 Analyse générée par MemoBot AI
-                    `.trim()
-                    
-                    navigator.clipboard.writeText(report)
-                    toast.success('Rapport copié dans le presse-papier')
-                  }}
+  `.trim()
+
+                  navigator.clipboard.writeText(report)
+                  toast.success('Rapport copié dans le presse-papier')
+                }}
                   className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   <Copy className="w-4 h-4" />
                   <span>Copier le rapport</span>
                 </button>
-                
+
                 <button
                   onClick={saveAnalysis}
                   className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-3 bg-blue-500 dark:bg-blue-900 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors"
@@ -476,7 +512,7 @@ Analyse générée par MemoBot AI
                   <Save className="w-4 h-4" />
                   <span>Enregistrer le sujet</span>
                 </button>
-                
+
                 <button
                   onClick={() => {
                     setShowResultsModal(false)
@@ -490,9 +526,10 @@ Analyse générée par MemoBot AI
               </div>
             </div>
           </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+        </div >
+      )
+      }
+    </AnimatePresence >
   )
 
   // Modal d'exemple
@@ -592,7 +629,7 @@ Analyse générée par MemoBot AI
                   <Sparkles className="w-4 h-4" />
                   <span>Analyser ce sujet</span>
                 </button>
-                
+
                 <button
                   onClick={() => setShowExampleModal(false)}
                   className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -643,18 +680,18 @@ Analyse générée par MemoBot AI
               </div>
               <span className="ml-2 text-sm font-medium">Informations</span>
             </div>
-            
+
             <ChevronRight className="w-5 h-5 text-blue-300" />
-            
+
             <div className={`flex items-center ${step >= 2 ? 'text-white' : 'text-blue-300'}`}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-white text-blue-600' : 'bg-white/20'}`}>
                 2
               </div>
               <span className="ml-2 text-sm font-medium">Analyse</span>
             </div>
-            
+
             <ChevronRight className="w-5 h-5 text-blue-300" />
-            
+
             <div className={`flex items-center ${analysis ? 'text-white' : 'text-blue-300'}`}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${analysis ? 'bg-white text-blue-600' : 'bg-white/20'}`}>
                 3
@@ -829,7 +866,7 @@ Analyse générée par MemoBot AI
               <BarChart3 className="w-5 h-5 text-purple-600" />
               Statistiques d'analyse
             </h3>
-            
+
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -838,7 +875,7 @@ Analyse générée par MemoBot AI
                 </div>
                 <span className="font-bold text-gray-900 dark:text-white">1,250+</span>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-blue-600" />
@@ -846,7 +883,7 @@ Analyse générée par MemoBot AI
                 </div>
                 <span className="font-bold text-gray-900 dark:text-white">92%</span>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-yellow-600" />
@@ -854,7 +891,7 @@ Analyse générée par MemoBot AI
                 </div>
                 <span className="font-bold text-gray-900 dark:text-white">15s</span>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-orange-600" />
@@ -871,7 +908,7 @@ Analyse générée par MemoBot AI
               <Lightbulb className="w-5 h-5 text-yellow-600" />
               Conseils pour une bonne analyse
             </h3>
-            
+
             <ul className="space-y-3">
               <li className="flex items-start gap-2">
                 <div className="w-2 h-2 bg-blue-600 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -932,7 +969,7 @@ Analyse générée par MemoBot AI
             Évaluation complète de la pertinence, originalité et faisabilité de votre sujet.
           </p>
         </div>
-        
+
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow">
           <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center mb-4">
             <Search className="w-6 h-6 text-green-600 dark:text-green-400" />
@@ -944,7 +981,7 @@ Analyse générée par MemoBot AI
             Recommandations spécifiques pour améliorer la qualité de votre recherche.
           </p>
         </div>
-        
+
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow">
           <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center mb-4">
             <Bookmark className="w-6 h-6 text-purple-600 dark:text-purple-400" />

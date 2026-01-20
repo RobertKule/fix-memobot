@@ -2,7 +2,6 @@
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from difflib import SequenceMatcher  # Utilise le module standard Python
-
 from app import crud, models, schemas
 
 class RecommendationEngine:

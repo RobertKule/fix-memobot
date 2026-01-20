@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
-
 from app.dependencies import get_current_user, get_db
 from app import schemas, crud
 from app.recommendation import recommendation_engine

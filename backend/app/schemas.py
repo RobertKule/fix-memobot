@@ -102,15 +102,18 @@ class Sujet(SujetBase):
     like_count: int = 0
     is_active: bool = True
     created_at: datetime
-    user_id: Optional[int] = None  # <-- IMPORTANT : Ce champ est probablement manquant
-    updated_at: Optional[datetime] = None  # <-- Optionnel, mais peut exister
+    
+    # Ces champs peuvent être optionnels dans la réponse
+    user_id: Optional[int] = None
+    updated_at: Optional[datetime] = None
+    is_generated: Optional[bool] = False  # <-- Ajoutez ce champ manquant
     
     class Config:
         from_attributes = True
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None
         }
-
+        
 # ========== RECOMMENDATION SCHEMAS ==========
 class RecommendationRequest(BaseModel):
     interests: List[str] = Field(..., description="Centres d'intérêt")

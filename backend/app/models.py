@@ -28,6 +28,14 @@ class User(Base):
     settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.sql import func
+from app.database import Base
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+
+
 class Sujet(Base):
     __tablename__ = "sujets"
     
@@ -44,23 +52,24 @@ class Sujet(Base):
     difficulté = Column(String(50), default="moyenne")
     durée_estimée = Column(String(50))
     ressources = Column(Text)
-    user_id: Optional[int] = None  # <-- IMPORTANT : Ce champ est probablement manquant
-    updated_at: Optional[datetime] = None  # <-- Optionnel, mais peut exister
     
-    # AJOUTEZ CES CHAMPS:
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Peut être null pour les sujets par défaut
-    is_generated = Column(Boolean, default=False)  # Marqueur pour les sujets générés par IA
+    # Champs relationnels
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    is_generated = Column(Boolean, default=False)
     
+    # Statistiques
     vue_count = Column(Integer, default=0)
     like_count = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
+    
+    # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
     
     # Relations
     feedbacks = relationship("Feedback", back_populates="sujet")
     history_entries = relationship("UserHistory", back_populates="sujet")
-    user = relationship("User")  # Ajoutez cette relation
-
+    user = relationship("User")
 
 class Feedback(Base):
     __tablename__ = "feedbacks"

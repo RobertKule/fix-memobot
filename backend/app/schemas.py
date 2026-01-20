@@ -98,16 +98,40 @@ class SujetUpdate(BaseModel):
 
 class Sujet(SujetBase):
     id: int
-    vue_count: int = 0
-    like_count: int = 0
+    # Accept both int and str to be robust against dirty DB data
+    vue_count: Union[int, str] = 0
+    like_count: Union[int, str] = 0
     is_active: bool = True
     created_at: datetime
-    
+
     # Ces champs peuvent être optionnels dans la réponse
     user_id: Optional[int] = None
     updated_at: Optional[datetime] = None
-    is_generated: Optional[bool] = False  # <-- Ajoutez ce champ manquant
-    
+    is_generated: Optional[bool] = False
+
+    @validator("vue_count", "like_count", pre=True)
+    def normalize_counts(cls, v):
+        """
+        Normalise les compteurs:
+        - int -> int
+        - "10" -> 10
+        - "10 vues" -> 10
+        - autres valeurs -> 0
+        """
+        if v is None:
+            return 0
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str):
+            digits = ''.join(ch for ch in v if ch.isdigit())
+            if digits:
+                try:
+                    return int(digits)
+                except ValueError:
+                    return 0
+        # Si vraiment pas convertible, fallback à 0
+        return 0
+
     class Config:
         from_attributes = True
         json_encoders = {

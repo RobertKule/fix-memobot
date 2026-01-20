@@ -35,7 +35,6 @@ from app.database import Base
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-
 class Sujet(Base):
     __tablename__ = "sujets"
     

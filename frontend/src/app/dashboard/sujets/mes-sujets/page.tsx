@@ -1,3 +1,7 @@
+// src/app/dashboard/sujets/mes-sujets/page.tsx
+// On adapte le frontend à l’erreur 422 "Input should be a valid integer, unable to parse string as an integer"
+// qui vient clairement du backend (Pydantic). On ne peut pas la corriger côté React, on la rend juste lisible.
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -10,49 +14,109 @@ import {
   Calendar,
   Tag,
   GraduationCap,
-  Filter,
   Search,
-  X
 } from 'lucide-react'
 import Link from 'next/link'
 import { api, Sujet } from '@/lib/api'
 import { toast } from 'sonner'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function MesSujetsPage() {
+  const { user } = useAuth()
   const [sujets, setSujets] = useState<Sujet[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [technicalError, setTechnicalError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchUserSujets()
-  }, [])
+    let cancelled = false
 
-  const fetchUserSujets = async () => {
+    const run = async () => {
+      if (!user?.id) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        await fetchUserSujetsDirect(cancelled)
+      } catch {
+        // erreur déjà gérée dans fetchUserSujetsDirect
+      }
+    }
+
+    run()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
+  const fetchUserSujetsDirect = async (cancelled = false) => {
     try {
       setLoading(true)
+      setError(null)
+      setTechnicalError(null)
+
+      if (!user?.id) {
+        if (!cancelled) setSujets([])
+        return
+      }
+
       const data = await api.getUserSujets()
-      setSujets(data)
-    } catch (error: any) {
-      toast.error('Erreur lors du chargement de vos sujets')
-      console.error(error)
+      if (!cancelled) {
+        setSujets(Array.isArray(data) ? data : [])
+      }
+    } catch (err: any) {
+      console.error('Erreur lors du chargement de vos sujets:', err)
+
+      // Messages lisibles pour l’utilisateur
+      let userMessage =
+        err?.message ||
+        err?.payload?.detail ||
+        'Erreur lors du chargement de vos sujets'
+
+      // Cas particulier de Pydantic: "Input should be a valid integer, unable to parse string as an integer"
+      if (
+        typeof err?.message === 'string' &&
+        err.message.includes('Input should be a valid integer')
+      ) {
+        userMessage =
+          "Erreur de données renvoyées par le serveur (un identifiant n'est pas un nombre valide). " +
+          "Contactez l'administrateur ou vérifiez que vos données de sujets sont correctes."
+      }
+
+      if (!cancelled) {
+        setError(userMessage)
+        setTechnicalError(
+          typeof err?.message === 'string' ? err.message : JSON.stringify(err?.payload || err)
+        )
+      }
+      toast.error(userMessage)
+      throw err
     } finally {
-      setLoading(false)
+      if (!cancelled) {
+        setLoading(false)
+      }
     }
   }
+
+  const fetchUserSujets = () => fetchUserSujetsDirect(false)
 
   const handleDeleteSujet = async (sujetId: number) => {
     try {
       await api.deleteUserSujet(sujetId)
       toast.success('Sujet supprimé avec succès')
-      fetchUserSujets()
+      await fetchUserSujets()
       setShowDeleteConfirm(null)
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la suppression')
+    } catch (err: any) {
+      console.error('Erreur lors de la suppression:', err)
+      toast.error(err?.message || 'Erreur lors de la suppression')
     }
   }
 
-  const filteredSujets = sujets.filter(sujet => {
+  const filteredSujets = sujets.filter((sujet) => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
     return (
@@ -68,8 +132,63 @@ export default function MesSujetsPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Chargement de vos sujets...</p>
+          <p className="text-gray-600 dark:text-gray-400">
+            Connexion au serveur, nous préparons vos sujets pour vous...
+          </p>
         </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] p-4 text-center space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">
+            Erreur lors du chargement de vos sujets
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-2 max-w-md mx-auto">
+            {error}
+          </p>
+          {technicalError && (
+            <p className="text-xs text-gray-400 max-w-md mx-auto">
+              Détail technique: {technicalError}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={fetchUserSujets}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Réessayer
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+          >
+            Recharger la page
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] p-4 text-center">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          Vous devez être connecté pour voir vos sujets
+        </h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
+          Connectez-vous puis revenez sur cette page pour gérer vos sujets.
+        </p>
+        <Link
+          href="/login"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Aller à la page de connexion
+        </Link>
       </div>
     )
   }
@@ -89,7 +208,7 @@ export default function MesSujetsPage() {
               </h1>
             </div>
             <p className="text-gray-600 dark:text-gray-400">
-              Gérer vos sujets de mémoire créés
+              Gérez vos sujets de mémoire créés
             </p>
           </div>
           <Link
@@ -135,16 +254,20 @@ export default function MesSujetsPage() {
                     <GraduationCap className="w-3 h-3" />
                     {sujet.niveau}
                   </span>
-                  <span className={`px-3 py-1 text-sm rounded-full flex items-center gap-1 ${
-                    sujet.difficulté === 'facile' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
-                    sujet.difficulté === 'moyenne' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
-                    'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                  }`}>
+                  <span
+                    className={`px-3 py-1 text-sm rounded-full flex items-center gap-1 ${
+                      sujet.difficulté === 'facile'
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                        : sujet.difficulté === 'moyenne'
+                        ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                    }`}
+                  >
                     {sujet.difficulté}
                   </span>
                 </div>
               </div>
-              
+
               {/* Menu d'actions */}
               <div className="flex items-center gap-2">
                 <Link
@@ -184,14 +307,14 @@ export default function MesSujetsPage() {
                   <p className="line-clamp-2">{sujet.problématique}</p>
                 </div>
               )}
-              
+
               {sujet.faculté && (
                 <div className="flex items-center gap-2">
                   <span className="font-medium">Faculté:</span>
                   <span>{sujet.faculté}</span>
                 </div>
               )}
-              
+
               {sujet.durée_estimée && (
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
@@ -221,7 +344,7 @@ export default function MesSujetsPage() {
       </div>
 
       {/* Aucun sujet */}
-      {filteredSujets.length === 0 && !loading && (
+      {filteredSujets.length === 0 && (
         <div className="text-center py-12">
           <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
             <BookOpen className="w-8 h-8 text-gray-400" />
@@ -230,10 +353,9 @@ export default function MesSujetsPage() {
             {searchQuery ? 'Aucun sujet correspondant' : 'Aucun sujet créé'}
           </h3>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            {searchQuery 
+            {searchQuery
               ? 'Essayez de modifier votre recherche'
-              : 'Commencez par créer votre premier sujet de mémoire'
-            }
+              : 'Commencez par créer votre premier sujet de mémoire'}
           </p>
           {!searchQuery && (
             <Link
@@ -259,11 +381,12 @@ export default function MesSujetsPage() {
                 Confirmer la suppression
               </h3>
             </div>
-            
+
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Êtes-vous sûr de vouloir supprimer ce sujet ? Cette action est irréversible.
+              Êtes-vous sûr de vouloir supprimer ce sujet ? Cette action est
+              irréversible.
             </p>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(null)}

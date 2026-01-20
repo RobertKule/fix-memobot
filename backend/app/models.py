@@ -3,6 +3,8 @@ from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Foreign
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
+from typing import Optional, List, Dict, Any
+from datetime import datetime
 
 
 class User(Base):
@@ -42,6 +44,8 @@ class Sujet(Base):
     difficulté = Column(String(50), default="moyenne")
     durée_estimée = Column(String(50))
     ressources = Column(Text)
+    user_id: Optional[int] = None  # <-- IMPORTANT : Ce champ est probablement manquant
+    updated_at: Optional[datetime] = None  # <-- Optionnel, mais peut exister
     
     # AJOUTEZ CES CHAMPS:
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Peut être null pour les sujets par défaut

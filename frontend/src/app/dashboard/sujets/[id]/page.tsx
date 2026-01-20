@@ -64,12 +64,11 @@ export default function SujetDetailPage() {
       setLoading(true)
       setError(null)
       
-      const response = await api.getSujet(sujetId)
-
-// response EST le sujet
-setSujet(response)
-
       
+
+      const response = await api.getSujet(sujetId)
+setSujet(response.sujet)  // <-- response.sujet, pas response directement
+setAiAnalysis(response.analyse || null) // Récupérer l'analyse si disponible
       // Simuler des états initiaux
       setIsLiked(Math.random() > 0.5)
       setIsSaved(Math.random() > 0.7)

@@ -175,11 +175,15 @@ export default function RecommendationsPage() {
   const [message, setMessage] = useState('')
 
   // Vérifier si les intérêts sont vides
-  useEffect(() => {
-    if (!loading && filters.interests.length === 0) {
+useEffect(() => {
+  if (!loading && !error && filters.interests.length === 0) {
+    // Petit délai pour que l'UI se charge d'abord
+    const timer = setTimeout(() => {
       setShowInterestsModal(true)
-    }
-  }, [loading, filters.interests])
+    }, 500)
+    return () => clearTimeout(timer)
+  }
+}, [loading, error, filters.interests])
 
   // Charger les données initiales
   useEffect(() => {
@@ -262,46 +266,82 @@ export default function RecommendationsPage() {
   }, [filters])
 
   // Sauvegarder un sujet choisi
-  // page.tsx - Dans la fonction saveChosenSubject
 
 const saveChosenSubject = useCallback(async (subject: any) => {
-    try {
-      setGenerating(true)
+  try {
+    setGenerating(true)
+    
+    const savingToast = toast.loading(
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8">
+          <Save className="w-6 h-6 text-blue-600 animate-pulse-subtle" />
+        </div>
+        <div>
+          <p className="font-medium">MemoBot enregistre votre choix... 💾</p>
+          <p className="text-sm text-gray-600">Sauvegarde dans votre collection personnelle</p>
+        </div>
+      </div>,
+      { id: 'saving-subject' }
+    )
 
-      // Normaliser les données avant envoi
-      const sujetData = {
-        titre: subject.titre || 'Sujet sans titre',
-        description: subject.description || 'Description à compléter',
-        keywords: subject.keywords || subject.keywords || '',
-        domaine: subject.domaine || filters.domaine || 'Génie Informatique',
-        niveau: subject.niveau || filters.niveau || 'M2',
-        faculté: subject.faculté || filters.faculté || 'Sciences',
-        problématique: subject.problématique || subject.problematic || subject.description || 'Problématique à définir',
-        méthodologie: subject.methodologie || subject.méthodologie || 'Méthodologie à définir',
-        difficulté: (subject.difficulté || 'moyenne').toLowerCase(),
-        durée_estimée: subject.durée_estimée || '6 mois',
-        interests: filters.interests
-      };
+    // Normaliser les données avant envoi
+    const sujetData = {
+      titre: subject.titre || 'Sujet sans titre',
+      description: subject.description || 'Description à compléter',
+      keywords: subject.keywords || subject.keywords || '',
+      domaine: subject.domaine || filters.domaine || 'Génie Informatique',
+      niveau: subject.niveau || filters.niveau || 'M2',
+      faculté: subject.faculté || filters.faculté || 'Sciences',
+      problématique: subject.problématique || subject.problematic || subject.description || 'Problématique à définir',
+      méthodologie: subject.methodologie || subject.méthodologie || 'Méthodologie à définir',
+      difficulté: (subject.difficulté || 'moyenne').toLowerCase(),
+      durée_estimée: subject.durée_estimée || '6 mois',
+      interests: filters.interests
+    };
 
-      console.log('📤 Envoi des données:', sujetData);
+    console.log('📤 Envoi des données:', sujetData);
 
-      await api.saveChosenSubject(sujetData)
+    const savedSujet = await api.saveChosenSubject(sujetData)
 
-      setSelectedSubject(subject)
-      setShowSubjectSelector(false)
+    // Fermer le toast de chargement
+    toast.dismiss('saving-subject')
+    
+    // Afficher le succès
+    toast.success(
+      <div className="flex items-center gap-3">
+        <Check className="w-6 h-6 text-green-600" />
+        <div>
+          <p className="font-medium">Sujet sauvegardé avec succès ! ✅</p>
+          <p className="text-sm text-gray-600">Redirection vers votre collection...</p>
+        </div>
+      </div>,
+      { duration: 3000 }
+    )
 
-      toast.success('✅ Sujet sauvegardé dans votre collection !')
+    setSelectedSubject(subject)
+    setShowSubjectSelector(false)
 
-      // Rediriger vers la page des sujets existante
-      router.push('/dashboard/sujets') // Corrigé
+    // Rediriger vers le sujet spécifique
+    setTimeout(() => {
+      router.push(`/dashboard/sujets/${savedSujet.id}`)
+    }, 2000)
 
-    } catch (err: any) {
-      console.error('❌ Erreur sauvegarde:', err)
-      toast.error(err.message || 'Erreur lors de la sauvegarde')
-    } finally {
-      setGenerating(false)
-    }
-  }, [filters, router])
+  } catch (err: any) {
+    toast.dismiss('saving-subject')
+    console.error('❌ Erreur sauvegarde:', err)
+    toast.error(
+      <div className="flex items-center gap-3">
+        <AlertCircle className="w-6 h-6 text-red-600" />
+        <div>
+          <p className="font-medium">Erreur lors de la sauvegarde</p>
+          <p className="text-sm text-gray-600">{err.message}</p>
+        </div>
+      </div>
+    )
+  } finally {
+    setGenerating(false)
+  }
+}, [filters, router])
 
   // Générer des recommandations
   const generateRecommendations = useCallback(async (customFilters?: Partial<RecommendationFilters>) => {
@@ -375,65 +415,135 @@ const saveChosenSubject = useCallback(async (subject: any) => {
   }, [message])
 
   // Générer avec IA (ancienne méthode)
-  const handleGenerateWithAI = useCallback(async () => {
-    try {
-      setGenerating(true)
+const handleGenerateWithAI = async () => {
+  try {
+    setGenerating(true)
 
-      if (!filters.interests.length) {
-        toast.error('Veuillez spécifier vos intérêts d\'abord')
-        setShowInterestsModal(true)
-        return
-      }
-
-      const generated = await api.generateSubjects({
-        interests: filters.interests,
-        domaine: filters.domaine || 'Génie Informatique',
-        niveau: filters.niveau || 'M2',
-        faculté: filters.faculté || 'Sciences',
-        count: 5
-      })
-
-      const aiSujets: RecommendedSujet[] = generated.map((subject: any, index: number) => ({
-        sujet: {
-          id: 1000 + index,
-          titre: subject.titre,
-          description: subject.description,
-          keywords: subject.keywords,
-          domaine: subject.domaine || filters.domaine || 'Génie Informatique',
-          niveau: subject.niveau || filters.niveau || 'M2',
-          faculté: subject.faculté || filters.faculté || 'Informatique',
-          problématique: subject.problématique || subject.description,
-          méthodologie: subject.methodologie || 'Méthodologie à définir',
-          difficulté: subject.difficulté || 'moyenne',
-          durée_estimée: subject.durée_estimée || '6 mois',
-          vue_count: 0,
-          like_count: 0,
-          is_active: true,
-          created_at: new Date().toISOString()
-        } as Sujet,
-        score: Math.floor(Math.random() * 30) + 70,
-        raisons: [
-          'Généré par IA selon vos intérêts',
-          'Problématique innovante',
-          'Adapté à votre niveau académique'
-        ],
-        critères_respectés: [
-          'Pertinence avec vos intérêts',
-          'Niveau adapté',
-          'Méthodologie définie'
-        ]
-      }))
-
-      setRecommendations(aiSujets)
-      toast.success('🤖 Sujets générés avec IA')
-
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur lors de la génération IA')
-    } finally {
-      setGenerating(false)
+    if (!filters.interests.length) {
+      toast.error('Veuillez spécifier vos intérêts d\'abord')
+      setShowInterestsModal(true)
+      return
     }
-  }, [filters])
 
+    // Utilisez generateThreeSubjects au lieu de generateSubjects
+    const response = await api.generateThreeSubjects({
+      interests: filters.interests,
+      domaine: filters.domaine || 'Génie Informatique',
+      niveau: filters.niveau || 'M2',
+      faculté: filters.faculté || 'Sciences'
+    })
+
+    // Transformez la réponse pour la compatibilité
+    const aiSujets: RecommendedSujet[] = response.subjects.map((subject: any, index: number) => ({
+      sujet: {
+        id: 1000 + index,
+        titre: subject.titre,
+        description: subject.description,
+        keywords: subject.keywords,
+        domaine: subject.domaine || filters.domaine || 'Génie Informatique',
+        niveau: subject.niveau || filters.niveau || 'M2',
+        faculté: subject.faculté || filters.faculté || 'Sciences',
+        problématique: subject.problématique || subject.description,
+        méthodologie: subject.methodologie || subject.méthodologie || 'Méthodologie à définir',
+        difficulté: subject.difficulté || 'moyenne',
+        durée_estimée: subject.durée_estimée || '6 mois',
+        vue_count: 0,
+        like_count: 0,
+        is_active: true,
+        created_at: new Date().toISOString()
+      } as Sujet,
+      score: Math.floor(Math.random() * 30) + 70,
+      raisons: [
+        'Généré par IA selon vos intérêts',
+        'Problématique innovante',
+        'Adapté à votre niveau académique'
+      ],
+      critères_respectés: [
+        'Pertinence avec vos intérêts',
+        'Niveau adapté',
+        'Méthodologie définie'
+      ]
+    }))
+
+    setRecommendations(aiSujets)
+    toast.success('🤖 Sujets générés avec IA')
+
+  } catch (err: any) {
+    toast.error(err.message || 'Erreur lors de la génération IA')
+  } finally {
+    setGenerating(false)
+  }
+}
+
+const handleGenerateWithAISmooth = async () => {
+  try {
+    setGenerating(true)
+    
+    // Afficher un toast de chargement
+    const loadingToast = toast.loading(
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8">
+          <div className="w-full h-full border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+        <div>
+          <p className="font-medium">MemoBot travaille pour vous... ✨</p>
+          <p className="text-sm text-gray-600">Analyse de vos intérêts et génération de sujets IA</p>
+        </div>
+      </div>,
+      { 
+        duration: Infinity, // Reste affiché jusqu'à ce qu'on le ferme
+        id: 'ai-generation' 
+      }
+    )
+
+    if (!filters.interests.length) {
+      toast.error('Veuillez spécifier vos intérêts d\'abord', { id: 'ai-generation' })
+      setShowInterestsModal(true)
+      return
+    }
+
+    // Utilisez generateThreeSubjects
+    const response = await api.generateThreeSubjects({
+      interests: filters.interests,
+      domaine: filters.domaine || 'Génie Informatique',
+      niveau: filters.niveau || 'M2',
+      faculté: filters.faculté || 'Sciences'
+    })
+
+    // Fermer le toast de chargement
+    toast.dismiss('ai-generation')
+    
+    // Afficher le succès
+    toast.success(
+      <div className="flex items-center gap-3">
+        <Sparkles className="w-6 h-6 text-yellow-500" />
+        <div>
+          <p className="font-medium">3 sujets IA générés avec succès ! 🎉</p>
+          <p className="text-sm text-gray-600">Choisissez celui qui vous inspire le plus</p>
+        </div>
+      </div>,
+      { duration: 4000 }
+    )
+
+    setAiGeneratedSubjects(response.subjects)
+    setGenerationSessionId(response.session_id)
+    setShowSubjectSelector(true)
+
+  } catch (err: any) {
+    toast.dismiss('ai-generation')
+    toast.error(
+      <div className="flex items-center gap-3">
+        <AlertCircle className="w-6 h-6 text-red-500" />
+        <div>
+          <p className="font-medium">Erreur lors de la génération</p>
+          <p className="text-sm text-gray-600">{err.message}</p>
+        </div>
+      </div>
+    )
+  } finally {
+    setGenerating(false)
+  }
+}
   // Gestion des filtres
   const handleUpdateFilters = useCallback((updates: Partial<RecommendationFilters>) => {
     setFilters(prev => ({ ...prev, ...updates }))
@@ -450,27 +560,55 @@ const saveChosenSubject = useCallback(async (subject: any) => {
     })
   }, [userPreferences])
 
-  const handleSaveInterests = useCallback(async () => {
-    if (filters.interests.length === 0) {
-      toast.error('Veuillez sélectionner au moins un intérêt')
-      return
+ 
+const handleSaveInterests = useCallback(async () => {
+  if (filters.interests.length === 0) {
+    toast.error('Veuillez sélectionner au moins un intérêt')
+    return
+  }
+
+  try {
+    // Afficher un loader
+    toast.loading('MemoBot enregistre vos préférences...', {
+      id: 'saving-interests'
+    })
+
+    // Sauvegarder les préférences
+    await api.updatePreferences({
+      interests: filters.interests.join(', '),
+      faculty: filters.faculté,
+      level: filters.niveau
+    })
+
+    // Mettre à jour les préférences locales
+    setUserPreferences(prev => prev ? {
+      ...prev,
+      interests: filters.interests.join(', '),
+      faculty: filters.faculté,
+      level: filters.niveau
+    } : null)
+
+    setShowInterestsModal(false)
+    
+    // Fermer le toast de chargement
+    toast.dismiss('saving-interests')
+    
+    // Afficher le succès
+    toast.success('✅ Préférences sauvegardées avec succès !')
+    
+    // Générer automatiquement des recommandations
+    if (filters.interests.length >= 3) {
+      setTimeout(() => {
+        toast.info('🎯 MemoBot génère vos premières recommandations...')
+        generateRecommendations()
+      }, 1000)
     }
 
-    try {
-      await api.updatePreferences({
-        interests: filters.interests.join(', '),
-        faculty: filters.faculté,
-        level: filters.niveau
-      })
-
-      setShowInterestsModal(false)
-      toast.success('✅ Intérêts sauvegardés avec succès')
-      await generateRecommendations()
-
-    } catch (err: any) {
-      toast.error('Erreur lors de la sauvegarde des intérêts')
-    }
-  }, [filters, generateRecommendations])
+  } catch (err: any) {
+    toast.dismiss('saving-interests')
+    toast.error('Erreur lors de la sauvegarde des intérêts: ' + err.message)
+  }
+}, [filters, generateRecommendations])
 
   const toggleInterest = useCallback((interest: string) => {
     setFilters(prev => ({
@@ -552,7 +690,120 @@ setChatHistory(prev => [...prev, aiMessage])
   }), [recommendations, savedSujets])
 
   // Composant Modal d'intérêts
-  const InterestsModal = useCallback(() => (
+const InterestsModal = () => {
+  // État local pour éviter les re-renders globaux
+  const [localCustomInterest, setLocalCustomInterest] = useState('')
+  const [localMessage, setLocalMessage] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filteredSuggestions, setFilteredSuggestions] = useState(suggestedInterests)
+
+  // Filtrer les suggestions sans re-render global
+  useEffect(() => {
+    if (!searchTerm) {
+      setFilteredSuggestions(suggestedInterests)
+    } else {
+      const filtered = suggestedInterests.filter(interest =>
+        interest.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      setFilteredSuggestions(filtered)
+    }
+  }, [searchTerm])
+
+  // Fonction pour ajouter un intérêt localement
+  const handleAddCustomInterest = () => {
+    const trimmedInterest = localCustomInterest.trim()
+    if (trimmedInterest && !filters.interests.includes(trimmedInterest)) {
+      toggleInterest(trimmedInterest)
+      setLocalCustomInterest('')
+    }
+  }
+
+  // Fonction de sauvegarde améliorée avec auto-save
+  const handleSaveInterestsOptimized = async () => {
+    if (filters.interests.length === 0) {
+      toast.error('Veuillez sélectionner au moins un intérêt')
+      return
+    }
+
+    try {
+      setIsSaving(true)
+      
+      // Toast de chargement élégant
+      const toastId = toast.loading(
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8">
+            <div className="w-full h-full border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <div>
+            <p className="font-medium">MemoBot enregistre vos préférences...</p>
+            <p className="text-sm text-gray-600">Personnalisation de votre expérience</p>
+          </div>
+        </div>,
+        { id: 'saving-interests-modal' }
+      )
+
+      // Sauvegarder les préférences
+      await api.updatePreferences({
+        interests: filters.interests.join(', '),
+        faculty: filters.faculté || '',
+        level: filters.niveau || '',
+        additional_info: localMessage || ''
+      })
+
+      // Fermer le toast
+      toast.dismiss(toastId)
+      
+      // Succès
+      toast.success(
+        <div className="flex items-center gap-3">
+          <Check className="w-6 h-6 text-green-600" />
+          <div>
+            <p className="font-medium">Préférences sauvegardées ! ✅</p>
+            <p className="text-sm text-gray-600">Votre profil est maintenant personnalisé</p>
+          </div>
+        </div>,
+        { duration: 3000 }
+      )
+
+      // Fermer le modal
+      setShowInterestsModal(false)
+      
+      // Auto-générer des recommandations si assez d'intérêts
+      if (filters.interests.length >= 3) {
+        setTimeout(() => {
+          generateRecommendations()
+        }, 1000)
+      }
+
+    } catch (err: any) {
+      toast.dismiss('saving-interests-modal')
+      toast.error(
+        <div className="flex items-center gap-3">
+          <AlertCircle className="w-6 h-6 text-red-600" />
+          <div>
+            <p className="font-medium">Erreur lors de la sauvegarde</p>
+            <p className="text-sm text-gray-600">{err.message || 'Veuillez réessayer'}</p>
+          </div>
+        </div>
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Sauvegarde automatique quand on atteint 3 intérêts
+  useEffect(() => {
+    if (filters.interests.length === 3 && !isSaving) {
+      const autoSaveTimer = setTimeout(() => {
+        handleSaveInterestsOptimized()
+      }, 1500) // 1.5 secondes après la sélection du 3ème intérêt
+      
+      return () => clearTimeout(autoSaveTimer)
+    }
+  }, [filters.interests.length])
+
+  return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -564,86 +815,174 @@ setChatHistory(prev => [...prev, aiMessage])
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 ${COLORS.primary.bg} ${COLORS.primary.darkBg} rounded-xl flex items-center justify-center shadow-lg`}>
-                <Tag className="w-5 h-5 text-white" />
+                <Brain className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Définissez vos intérêts</h2>
-                <p className="text-gray-600 dark:text-gray-400">Sélectionnez vos domaines d'intérêt pour des recommandations personnalisées</p>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {filters.interests.length === 0 ? 
+                    "Bienvenue dans MemoBot! ✨" : 
+                    "Personnalisez votre expérience"}
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {filters.interests.length === 0 ?
+                    "Sélectionnez vos centres d'intérêt pour commencer" :
+                    `${filters.interests.length} intérêt(s) sélectionné(s)`}
+                </p>
               </div>
             </div>
-            <button
-              onClick={() => setShowInterestsModal(false)}
-              className="p-2 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" />
-            </button>
+            {filters.interests.length > 0 && (
+              <button
+                onClick={() => setShowInterestsModal(false)}
+                className="p-2 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
+                disabled={isSaving}
+              >
+                <X className="w-5 h-5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" />
+              </button>
+            )}
           </div>
         </div>
 
         <div className="p-6 overflow-y-auto max-h-[60vh]">
-          {/* Intérêts sélectionnés */}
+          {/* Progress bar automatique */}
+          {filters.interests.length > 0 && (
+            <div className="mb-6">
+              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                <span>Progression</span>
+                <span>{filters.interests.length}/3 intérêts</span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all duration-500 ${
+                    filters.interests.length === 0 ? 'w-0' :
+                    filters.interests.length === 1 ? 'w-1/3 bg-red-500' :
+                    filters.interests.length === 2 ? 'w-2/3 bg-yellow-500' :
+                    'w-full bg-green-500'
+                  }`}
+                />
+              </div>
+              {filters.interests.length < 3 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  {3 - filters.interests.length} intérêt(s) supplémentaire(s) pour une personnalisation optimale
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Intérêts sélectionnés - avec animation auto */}
           <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Vos intérêts sélectionnés ({filters.interests.length})
+              Vos intérêts sélectionnés
+              {filters.interests.length >= 3 && (
+                <span className="ml-2 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-full">
+                  ✓ Prêt
+                </span>
+              )}
             </h3>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {filters.interests.map((interest, index) => (
-                <span
-                  key={index}
-                  className="px-3 py-1.5 bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-700 dark:text-blue-300 rounded-full flex items-center gap-2 text-sm font-medium shadow-sm border border-blue-200 dark:border-blue-800"
+            
+            {filters.interests.length > 0 ? (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {filters.interests.map((interest, index) => (
+                  <span
+                    key={index}
+                    className="group px-3 py-1.5 bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-700 dark:text-blue-300 rounded-full flex items-center gap-2 text-sm font-medium shadow-sm border border-blue-200 dark:border-blue-800"
+                  >
+                    {interest}
+                    <button
+                      onClick={() => toggleInterest(interest)}
+                      className="opacity-0 group-hover:opacity-100 transition-all hover:text-blue-900 dark:hover:text-blue-100"
+                      disabled={isSaving}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl mb-4">
+                <Tag className="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
+                <p className="text-gray-500 dark:text-gray-400">
+                  Commencez par sélectionner vos centres d'intérêt
+                </p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Nous utiliserons ces informations pour personnaliser vos recommandations
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Suggestions d'intérêts avec recherche locale */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Suggestions populaires
+              </h3>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {filteredSuggestions.length} suggestions
+              </span>
+            </div>
+            
+            {/* Barre de recherche locale */}
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher un intérêt..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[200px] overflow-y-auto p-1">
+              {filteredSuggestions.map((interest) => (
+                <button
+                  key={interest}
+                  onClick={() => toggleInterest(interest)}
+                  disabled={isSaving}
+                  className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                    filters.interests.includes(interest)
+                      ? `${COLORS.primary.bg} ${COLORS.primary.darkBg} text-white border-transparent shadow-md`
+                      : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {interest}
-                  <button
-                    onClick={() => toggleInterest(interest)}
-                    className="hover:text-blue-900 dark:hover:text-blue-100 transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
+                </button>
               ))}
-              {filters.interests.length === 0 && (
-                <div className="text-sm text-gray-500 dark:text-gray-400 italic">
-                  Aucun intérêt sélectionné. Choisissez dans la liste ci-dessous ou ajoutez-en un personnalisé.
+              {filteredSuggestions.length === 0 && (
+                <div className="col-span-3 text-center py-4 text-gray-500 dark:text-gray-400">
+                  Aucun résultat pour "{searchTerm}"
                 </div>
               )}
             </div>
           </div>
 
-          {/* Suggestions d'intérêts */}
+          {/* Ajouter un intérêt personnalisé - état local */}
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Suggestions d'intérêts</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {suggestedInterests.map((interest) => (
-                <button
-                  key={interest}
-                  onClick={() => toggleInterest(interest)}
-                  className={`px-3 py-2 rounded-lg border text-sm transition-all duration-200 ${
-                    filters.interests.includes(interest)
-                      ? `${COLORS.primary.bg} ${COLORS.primary.darkBg} text-white border-transparent shadow-md`
-                      : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
-                  }`}
-                >
-                  {interest}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Ajouter un intérêt personnalisé */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Ajouter un intérêt personnalisé</h3>
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Ajouter un intérêt personnalisé
+            </h3>
             <div className="flex gap-2">
               <input
                 type="text"
-                value={customInterest}
-                onChange={(e) => setCustomInterest(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addCustomInterest()}
-                placeholder="Ex: Intelligence artificielle, Blockchain..."
-                className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                value={localCustomInterest}
+                onChange={(e) => setLocalCustomInterest(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAddCustomInterest()}
+                placeholder="Votre intérêt spécifique..."
+                className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-sm"
+                disabled={isSaving}
               />
               <button
-                onClick={addCustomInterest}
-                className={`px-4 py-2 ${COLORS.primary.bg} ${COLORS.primary.darkBg} text-white rounded-lg ${COLORS.primary.hoverBg} ${COLORS.primary.darkHoverBg} transition-all flex items-center gap-2 shadow-md`}
+                onClick={handleAddCustomInterest}
+                disabled={!localCustomInterest.trim() || isSaving}
+                className={`px-4 py-2 ${COLORS.primary.bg} ${COLORS.primary.darkBg} text-white rounded-lg ${COLORS.primary.hoverBg} ${COLORS.primary.darkHoverBg} transition-all flex items-center gap-2 shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 <Plus className="w-4 h-4" />
                 Ajouter
@@ -651,46 +990,94 @@ setChatHistory(prev => [...prev, aiMessage])
             </div>
           </div>
 
-          {/* Message optionnel */}
-          <div className="mt-6">
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message (optionnel)</h3>
+          {/* Message optionnel - état local */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Précisions supplémentaires
+              </h3>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Optionnel
+              </span>
+            </div>
             <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Décrivez ce que vous recherchez exactement..."
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg min-h-[80px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+              value={localMessage}
+              onChange={(e) => setLocalMessage(e.target.value)}
+              placeholder="Ex: Je suis particulièrement intéressé par l'IA appliquée à la santé, avec un focus sur l'apprentissage profond..."
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg min-h-[80px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-sm"
+              disabled={isSaving}
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Ce message aidera l'IA à mieux comprendre vos besoins.
+              Ces détails aideront MemoBot à mieux comprendre vos besoins spécifiques
             </p>
           </div>
         </div>
 
         <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="text-sm text-gray-600 dark:text-gray-400">
-              Sélectionnez au moins 3 intérêts pour des recommandations optimales
+              {isSaving ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span>Sauvegarde en cours...</span>
+                </div>
+              ) : filters.interests.length === 0 ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <span>Sélectionnez au moins un intérêt pour continuer</span>
+                </div>
+              ) : filters.interests.length < 3 ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span>Ajoutez {3 - filters.interests.length} intérêt(s) pour une personnalisation optimale</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span>Parfait ! Votre profil est personnalisé</span>
+                </div>
+              )}
             </div>
+            
             <div className="flex gap-3">
+              {filters.interests.length > 0 && !isSaving && (
+                <button
+                  onClick={() => setShowInterestsModal(false)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
+                >
+                  Fermer
+                </button>
+              )}
+              
               <button
-                onClick={() => setShowInterestsModal(false)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={handleSaveInterestsOptimized}
+                disabled={filters.interests.length === 0 || isSaving}
+                className={`px-4 py-2 ${COLORS.primary.bg} ${COLORS.primary.darkBg} text-white rounded-lg ${COLORS.primary.hoverBg} ${COLORS.primary.darkHoverBg} transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md text-sm flex items-center gap-2`}
               >
-                Plus tard
-              </button>
-              <button
-                onClick={handleSaveInterests}
-                disabled={filters.interests.length === 0}
-                className={`px-4 py-2 ${COLORS.primary.bg} ${COLORS.primary.darkBg} text-white rounded-lg ${COLORS.primary.hoverBg} ${COLORS.primary.darkHoverBg} transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md`}
-              >
-                Sauvegarder et continuer
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Enregistrement...
+                  </>
+                ) : filters.interests.length < 3 ? (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Sauvegarder ({filters.interests.length}/3)
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Sauvegarder et continuer
+                  </>
+                )}
               </button>
             </div>
           </div>
         </div>
       </motion.div>
     </div>
-  ), [filters, customInterest, message, toggleInterest, addCustomInterest, handleSaveInterests])
+  )
+}
 
   // États de chargement et erreur
   if (loading) {
@@ -793,18 +1180,24 @@ setChatHistory(prev => [...prev, aiMessage])
                 )}
                 Générer 3 sujets IA
               </button>
-              <button
-                onClick={handleGenerateWithAI}
-                disabled={generating || filters.interests.length === 0}
-                className={`px-4 py-2 ${COLORS.primary.bg} ${COLORS.primary.darkBg} text-white rounded-lg ${COLORS.primary.hoverBg} ${COLORS.primary.darkHoverBg} transition-all flex items-center gap-2 disabled:opacity-50 shadow-md`}
-              >
-                {generating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Zap className="w-4 h-4" />
-                )}
-                Générer avec IA
-              </button>
+              {/* REMPLACEZ le bouton ligne ~850 */}
+<button
+  onClick={handleGenerateWithAISmooth}  // <-- Utiliser la nouvelle fonction
+  disabled={generating || filters.interests.length === 0}
+  className={`px-4 py-2 ${COLORS.primary.bg} ${COLORS.primary.darkBg} text-white rounded-lg ${COLORS.primary.hoverBg} ${COLORS.primary.darkHoverBg} transition-all flex items-center gap-2 disabled:opacity-50 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95`}
+>
+  {generating ? (
+    <div className="flex items-center gap-2">
+      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+      <span className="animate-pulse">Génération...</span>
+    </div>
+  ) : (
+    <>
+      <Zap className="w-4 h-4" />
+      Générer avec IA
+    </>
+  )}
+</button>
             </div>
           </div>
         </div>

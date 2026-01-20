@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, EmailStr, validator
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
+from typing import Optional, List, Dict, Any
 
 # Enums
 class UserRole(str, Enum):
@@ -97,13 +98,18 @@ class SujetUpdate(BaseModel):
 
 class Sujet(SujetBase):
     id: int
-    vue_count: int
-    like_count: int
-    is_active: bool
+    vue_count: int = 0
+    like_count: int = 0
+    is_active: bool = True
     created_at: datetime
+    user_id: Optional[int] = None  # <-- IMPORTANT : Ce champ est probablement manquant
+    updated_at: Optional[datetime] = None  # <-- Optionnel, mais peut exister
     
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
 
 # ========== RECOMMENDATION SCHEMAS ==========
 class RecommendationRequest(BaseModel):
@@ -113,6 +119,7 @@ class RecommendationRequest(BaseModel):
     domaine: Optional[str] = None
     difficulté: Optional[DifficultyLevel] = None
     limit: int = Field(10, ge=1, le=50, description="Nombre de résultats")
+
 
 class RecommendedSujet(BaseModel):
     sujet: Sujet

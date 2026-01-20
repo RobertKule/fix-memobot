@@ -7,8 +7,10 @@ import { AlertCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { api, Sujet, UserPreference } from '@/lib/api'
+import { useAuthGuard } from '@/hooks/useAuthGuard'
 
 export default function DashboardPage() {
+  useAuthGuard(true)
   const { user } = useAuth()
   const [stats, setStats] = useState([
     { label: 'Sujets', value: '0', icon: Target, color: 'text-blue-600' },

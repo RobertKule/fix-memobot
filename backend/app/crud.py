@@ -346,12 +346,12 @@ def get_domain_stats(db: Session) -> List[Dict[str, Any]]:
 
 def get_popular_sujets(db: Session, limit: int = 10):
     """Récupère les sujets les plus populaires par nombre de vues"""
-    return db.query(models.Sujet)\
-        .filter(models.Sujet.is_active == True)\
-        .order_by(models.Sujet.vue_count.desc(), models.Sujet.like_count.desc())\
+    return db.query(Sujet)\
+        .filter(Sujet.is_active == True)\
+        .order_by(Sujet.vue_count.desc(), Sujet.like_count.desc())\
         .limit(limit)\
         .all()
-
+        
 def get_dashboard_stats(db: Session, user_id: int) -> Dict[str, Any]:
     """Statistiques pour le tableau de bord"""
     # Total des sujets

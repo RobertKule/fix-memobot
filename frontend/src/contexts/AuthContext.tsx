@@ -1,7 +1,7 @@
 // src/contexts/AuthContext.tsx - VERSION CORRIGÉE
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { api, User } from '@/lib/api'
 import { usePathname, useRouter } from 'next/navigation'
 
@@ -37,14 +37,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   // Fonction pour rediriger vers login
-  const redirectToLogin = () => {
-    const publicPaths = ['/', '/login', '/register', '/forgot-password', '/reset-password']
-    const isPublicPath = publicPaths.some(path => pathname?.startsWith(path))
-    
+  const redirectToLogin = useCallback(() => {
+    const publicPaths = [
+      '/',
+      '/login',
+      '/register',
+      '/forgot-password',
+      '/reset-password',
+      '/explore',  // Ajoutez ici les routes publiques
+      '/about',
+      '/contact'
+    ]
+
+    // Vérifier si le path actuel est public
+    const isPublicPath = publicPaths.some(path =>
+      pathname === path ||
+      (path !== '/' && pathname?.startsWith(path))
+    )
+
+    // Ne rediriger que si on est sur une page protégée et non connecté
     if (!isPublicPath && typeof window !== 'undefined') {
-      router.push('/login')
+      // Stocker l'URL actuelle pour rediriger après login
+      const returnUrl = pathname || '/dashboard'
+      router.replace(`/login?returnUrl=${encodeURIComponent(returnUrl)}`)
     }
-  }
+  }, [pathname, router])
+
+  // Fonction pour vérifier et rediriger si non authentifié
+  const checkAndRedirect = useCallback(() => {
+    if (typeof window === 'undefined') return
+    
+    const token = localStorage.getItem('access_token')
+    const isDashboardRoute = pathname?.startsWith('/dashboard')
+    
+    if (!token && isDashboardRoute) {
+      router.replace(`/login?returnUrl=${encodeURIComponent(pathname || '/dashboard')}`)
+    }
+  }, [pathname, router])
 
   /**
    * 🔐 Initialisation de l'auth
@@ -54,15 +83,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initAuth = async () => {
       try {
-        // Vérifier si on est côté client
         if (typeof window === 'undefined') {
           setIsLoading(false)
           return
         }
 
+        // Vérifier d'abord si on est sur une page dashboard sans token
         const token = localStorage.getItem('access_token')
+        const isDashboardRoute = pathname?.startsWith('/dashboard')
 
-        if (!token) {
+        if (!token && isDashboardRoute) {
           if (mounted) {
             setUser(null)
             setIsLoading(false)
@@ -71,9 +101,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
-        // Récupérer les données utilisateur
+        if (!token) {
+          // Pas de token mais pas sur dashboard, on laisse passer
+          if (mounted) {
+            setUser(null)
+            setIsLoading(false)
+          }
+          return
+        }
+
+        // Tenter de récupérer l'utilisateur
         const userData = await api.getCurrentUser()
-        
+
         if (mounted) {
           setUser(userData)
           setIsLoading(false)
@@ -81,20 +120,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       } catch (error: any) {
         console.error('Auth initialization error:', error)
-        
-        // Si c'est une erreur 401, nettoyer et rediriger
-        if (error?.isUnauthorized || error?.status === 401) {
+
+        // Gérer spécifiquement les erreurs 401
+        if (error?.isUnauthorized || error?.status === 401 || error?.message?.includes('Session expirée')) {
           clearAuthStorage()
-          
+
           if (mounted) {
             setUser(null)
             setIsLoading(false)
           }
-          
+
+          // Afficher un message à l'utilisateur
+          if (typeof window !== 'undefined') {
+            // Vous pourriez utiliser un toast ici
+            console.log('Session expirée, redirection vers login')
+          }
+
           redirectToLogin()
         } else {
-          // Pour les autres erreurs, garder l'utilisateur connecté
-          // mais marquer comme chargé
+          // Pour les autres erreurs, continuer avec l'utilisateur actuel
           if (mounted) {
             setIsLoading(false)
           }
@@ -107,7 +151,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false
     }
-  }, [pathname, router])
+  }, [pathname, router, redirectToLogin])
+
+  // Vérifier l'authentification à chaque changement de route
+  useEffect(() => {
+    if (!isLoading && pathname) {
+      checkAndRedirect()
+    }
+  }, [pathname, isLoading, checkAndRedirect])
 
   /**
    * 🔑 LOGIN
@@ -187,7 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAuthStorage()
     setUser(null)
     setIsLoading(false)
-    router.push('/login')
+    router.replace('/login')
   }
 
   /**

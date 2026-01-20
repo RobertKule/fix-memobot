@@ -68,14 +68,14 @@ export default function DashboardSidebar({
       color: 'text-green-600',
       order: 2
     },
-    {
-      id: 'mes-sujets',
-      title: 'Mes sujets',
-      icon: BookOpen,
-      href: '/dashboard/sujets/mes-sujets',
-      color: 'text-orange-600',
-      order: 3
-    },
+    // {
+    //   id: 'mes-sujets',
+    //   title: 'Mes sujets',
+    //   icon: BookOpen,
+    //   href: '/dashboard/sujets/mes-sujets',
+    //   color: 'text-orange-600',
+    //   order: 3
+    // },
     {
       id: 'nouveau',
       title: 'Nouveau sujet',
@@ -84,14 +84,14 @@ export default function DashboardSidebar({
       color: 'text-green-600',
       order: 4
     },
-    {
-      id: 'favoris',
-      title: 'Favoris',
-      icon: Heart,
-      href: '/dashboard/favoris',
-      color: 'text-red-600',
-      order: 5
-    },
+    // {
+    //   id: 'favoris',
+    //   title: 'Favoris',
+    //   icon: Heart,
+    //   href: '/dashboard/favoris',
+    //   color: 'text-red-600',
+    //   order: 5
+    // },
     {
       id: 'historique',
       title: 'Historique',

@@ -330,7 +330,7 @@ def read_user(
 
 @router.get("/me/export")
 async def export_user_data(
-    format: str = Query("json", regex="^(json|csv)$"),
+    format: str = Query("json", pattern="^(json|csv)$"),
     current_user: schemas.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

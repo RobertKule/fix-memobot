@@ -26,8 +26,8 @@ export default function DashboardPage() {
   const quickActions = [
     { title: 'Continuer le chat', href: '/dashboard/chat', icon: MessageSquare },
     { title: 'Voir recommandations', href: '/dashboard/recommendations', icon: Star },
-    { title: 'Explorer sujets', href: '/dashboard/sujets', icon: Target },
-    { title: 'Consulter ressources', href: '/dashboard/ressources', icon: FileText },
+    // { title: 'Explorer sujets', href: '/dashboard/sujets', icon: Target },
+    // { title: 'Consulter ressources', href: '/dashboard/ressources', icon: FileText },
   ]
 
   useEffect(() => {

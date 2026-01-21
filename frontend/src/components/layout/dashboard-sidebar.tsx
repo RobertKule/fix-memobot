@@ -51,23 +51,23 @@ export default function DashboardSidebar({
   // Navigation complète en une seule liste
   const navItems = [
     // Principal
-    {
-      id: 'dashboard',
-      title: 'Tableau de bord',
-      icon: LayoutDashboard,
-      href: '/dashboard',
-      color: 'bg-gradient-to-br from-blue-500 to-blue-600',
-      order: 1
-    },
-    // Sujets
-    {
-      id: 'explore',
-      title: 'Explorer',
-      icon: Search,
-      href: '/dashboard/sujets/explore',
-      color: 'text-green-600',
-      order: 2
-    },
+    // {
+    //   id: 'dashboard',
+    //   title: 'Tableau de bord',
+    //   icon: LayoutDashboard,
+    //   href: '/dashboard',
+    //   color: 'bg-gradient-to-br from-blue-500 to-blue-600',
+    //   order: 1
+    // },
+    // // Sujets
+    // {
+    //   id: 'explore',
+    //   title: 'Explorer',
+    //   icon: Search,
+    //   href: '/dashboard/sujets/explore',
+    //   color: 'text-green-600',
+    //   order: 2
+    // },
     // {
     //   id: 'mes-sujets',
     //   title: 'Mes sujets',
@@ -76,14 +76,14 @@ export default function DashboardSidebar({
     //   color: 'text-orange-600',
     //   order: 3
     // },
-    {
-      id: 'nouveau',
-      title: 'Nouveau sujet',
-      icon: Plus,
-      href: '/dashboard/sujets/nouveau',
-      color: 'text-green-600',
-      order: 4
-    },
+    // {
+    //   id: 'nouveau',
+    //   title: 'Nouveau sujet',
+    //   icon: Plus,
+    //   href: '/dashboard/sujets/nouveau',
+    //   color: 'text-green-600',
+    //   order: 4
+    // },
     // {
     //   id: 'favoris',
     //   title: 'Favoris',
@@ -93,54 +93,55 @@ export default function DashboardSidebar({
     //   order: 5
     // },
     {
-      id: 'historique',
-      title: 'Historique',
-      icon: Clock,
-      href: '/dashboard/historique',
-      color: 'text-yellow-600',
-      order: 6
-    },
-    // IA
-    {
-      id: 'chat',
-      title: 'Assistant IA',
-      icon: MessageSquare,
-      href: '/dashboard/chat',
-      color: 'text-cyan-600',
-      order: 7
-    },
-    {
       id: 'recommendations',
       title: 'Recommandations',
       icon: Sparkles,
       href: '/dashboard/recommendations',
       color: 'text-purple-600',
-      order: 8
+      order: 1
     },
     {
-      id: 'analyze',
-      title: 'Analyse IA',
-      icon: Zap,
-      href: '/dashboard/ai/analyze',
-      color: 'text-purple-500',
-      order: 9
+      id: 'historique',
+      title: 'Historique',
+      icon: Clock,
+      href: '/dashboard/historique',
+      color: 'text-yellow-600',
+      order: 2
     },
-    // Communauté
-    {
-      id: 'popular',
-      title: 'Populaires',
-      icon: TrendingUp,
-      href: '/dashboard/community/popular',
-      color: 'text-pink-600',
-      order: 10
-    },
+    // IA
+    // {
+    //   id: 'chat',
+    //   title: 'Assistant IA',
+    //   icon: MessageSquare,
+    //   href: '/dashboard/chat',
+    //   color: 'text-cyan-600',
+    //   order: 7
+    // },
+    
+    // {
+    //   id: 'analyze',
+    //   title: 'Analyse IA',
+    //   icon: Zap,
+    //   href: '/dashboard/ai/analyze',
+    //   color: 'text-purple-500',
+    //   order: 9
+    // },
+    // // Communauté
+    // {
+    //   id: 'popular',
+    //   title: 'Populaires',
+    //   icon: TrendingUp,
+    //   href: '/dashboard/community/popular',
+    //   color: 'text-pink-600',
+    //   order: 10
+    // },
     {
       id: 'share',
       title: 'Partager',
       icon: Share2,
       href: '/dashboard/community/share',
       color: 'text-teal-600',
-      order: 11
+      order: 3
     }
   ]
 
@@ -225,65 +226,65 @@ export default function DashboardSidebar({
   }
 
   // Composant pour le tableau de bord (spécial)
-  const DashboardItem = ({ collapsed }: { collapsed: boolean }) => {
-    const isActive = pathname === '/dashboard'
+  // const DashboardItem = ({ collapsed }: { collapsed: boolean }) => {
+  //   const isActive = pathname === '/dashboard'
     
-    if (collapsed) {
-      return (
-        <div className="relative group mb-4">
-          <Link
-            href="/dashboard"
-            onClick={onClose}
-            onMouseEnter={() => setHoveredItem('dashboard-main')}
-            onMouseLeave={() => setHoveredItem(null)}
-          >
-            <div className={`
-              flex items-center justify-center p-3 rounded-lg transition-all duration-200
-              ${isActive 
-                ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg' 
-                : 'bg-gradient-to-br from-blue-400 to-blue-500 text-white hover:from-blue-500 hover:to-blue-600'
-              }
-            `}>
-              <LayoutDashboard className="w-5 h-5" />
-            </div>
+  //   if (collapsed) {
+  //     return (
+  //       <div className="relative group mb-4">
+  //         <Link
+  //           href="/dashboard"
+  //           onClick={onClose}
+  //           onMouseEnter={() => setHoveredItem('dashboard-main')}
+  //           onMouseLeave={() => setHoveredItem(null)}
+  //         >
+  //           <div className={`
+  //             flex items-center justify-center p-3 rounded-lg transition-all duration-200
+  //             ${isActive 
+  //               ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg' 
+  //               : 'bg-gradient-to-br from-blue-400 to-blue-500 text-white hover:from-blue-500 hover:to-blue-600'
+  //             }
+  //           `}>
+  //             <LayoutDashboard className="w-5 h-5" />
+  //           </div>
             
-            <div className={`
-              absolute left-full ml-2 top-1/2 transform -translate-y-1/2
-              px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl
-              opacity-0 transition-all duration-200 pointer-events-none z-50
-              ${hoveredItem === 'dashboard-main' ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'}
-              whitespace-nowrap min-w-[140px]
-            `}>
-              <div className="font-semibold">Tableau de bord</div>
-              <div className="text-gray-300 text-xs mt-1">Vue d'ensemble</div>
-            </div>
-          </Link>
-        </div>
-      )
-    }
+  //           <div className={`
+  //             absolute left-full ml-2 top-1/2 transform -translate-y-1/2
+  //             px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl
+  //             opacity-0 transition-all duration-200 pointer-events-none z-50
+  //             ${hoveredItem === 'dashboard-main' ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'}
+  //             whitespace-nowrap min-w-[140px]
+  //           `}>
+  //             <div className="font-semibold">Tableau de bord</div>
+  //             <div className="text-gray-300 text-xs mt-1">Vue d'ensemble</div>
+  //           </div>
+  //         </Link>
+  //       </div>
+  //     )
+  //   }
 
-    return (
-      <Link
-        href="/dashboard"
-        onClick={onClose}
-        className={`
-          flex items-center gap-3 px-3 py-3 mb-2 rounded-lg transition-all duration-200
-          ${isActive 
-            ? 'bg-gradient-to-br from-blue-500 to-blue-600 dark:from-gray-800 dark:to-gray-800 border border-blue-500 border-0 border-l-4 text-white shadow-lg' 
-            : 'bg-gradient-to-br from-blue-400 to-blue-500 dark:from-gray-900 dark:to-gray-900 text-white hover:from-blue-500 hover:to-blue-600'
-          }
-        `}
-      >
-        <div className="p-1.5 bg-white/20 rounded-lg">
-          <LayoutDashboard className="w-5 h-5" />
-        </div>
-        <div>
-          <span className="font-semibold">Tableau de bord</span>
-          <div className="text-white/80 text-xs mt-0.5">Vue d'ensemble</div>
-        </div>
-      </Link>
-    )
-  }
+  //   return (
+  //     <Link
+  //       href="/dashboard"
+  //       onClick={onClose}
+  //       className={`
+  //         flex items-center gap-3 px-3 py-3 mb-2 rounded-lg transition-all duration-200
+  //         ${isActive 
+  //           ? 'bg-gradient-to-br from-blue-500 to-blue-600 dark:from-gray-800 dark:to-gray-800 border border-blue-500 border-0 border-l-4 text-white shadow-lg' 
+  //           : 'bg-gradient-to-br from-blue-400 to-blue-500 dark:from-gray-900 dark:to-gray-900 text-white hover:from-blue-500 hover:to-blue-600'
+  //         }
+  //       `}
+  //     >
+  //       <div className="p-1.5 bg-white/20 rounded-lg">
+  //         <LayoutDashboard className="w-5 h-5" />
+  //       </div>
+  //       <div>
+  //         <span className="font-semibold">Tableau de bord</span>
+  //         <div className="text-white/80 text-xs mt-0.5">Vue d'ensemble</div>
+  //       </div>
+  //     </Link>
+  //   )
+  // }
 
   // Section utilisateur
   const UserSection = ({ collapsed }: { collapsed: boolean }) => {
@@ -424,7 +425,7 @@ export default function DashboardSidebar({
       {/* Navigation */}
       <div className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
         {/* Tableau de bord (toujours en premier) */}
-        <DashboardItem collapsed={collapsed} />
+        {/* <DashboardItem collapsed={collapsed} /> */}
 
         {/* Autres items */}
         {collapsed ? (

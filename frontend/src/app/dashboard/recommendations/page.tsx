@@ -90,11 +90,10 @@ export default function RecommendationsPage() {
 
       // Préparer les intérêts pour l'API
       const interestsList = userInterests ? 
-        userInterests.split(',')
-          .map(interest => interest.trim())
-          .filter(interest => interest.length > 0) : 
-        []
-
+  userInterests.split(',')
+    .map((interest: string) => interest.trim())
+    .filter((interest: string) => interest.length > 0) : 
+  []
       // Si pas d'intérêts, utiliser des intérêts par défaut basés sur le domaine
       let effectiveInterests = interestsList
       if (effectiveInterests.length === 0 && userField) {

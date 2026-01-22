@@ -755,6 +755,12 @@ class ApiService {
     }, { disableCache: true })
   }
 
+  async AskWithAI(data: { message: string; context?: string }): Promise<AIResponse> {
+    return this.request<AIResponse>('/ai/ask', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { disableCache: true })
+  }
   // ========== USERS ==========
   async getUserProfile(userId: number): Promise<UserProfile> {
     try {

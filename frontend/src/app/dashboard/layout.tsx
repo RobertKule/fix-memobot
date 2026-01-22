@@ -8,6 +8,7 @@ import { Loader2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import ClientAuthGuard from '@/components/auth/ClientAuthGuard'
 import { useRouter } from 'next/navigation'
+import MemoBotAssistant from '@/components/assistant/MemoBotAssistant'
 
 export default function DashboardLayout({ 
   children 
@@ -105,6 +106,7 @@ export default function DashboardLayout({
           <main className={`flex-1 transition-all duration-300 ease-in-out ${
             sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
           } ${sidebarOpen ? 'ml-64' : 'ml-0'} p-4 md:p-6`}>
+<MemoBotAssistant />
             {children}
           </main>
         </div>

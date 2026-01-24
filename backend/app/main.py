@@ -38,12 +38,13 @@ async def startup_init_vectorstore():
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        # "http://localhost:3000", 
-        # "http://127.0.0.1:3000",
-        # "http://localhost:3001",
-        # "https://memobot-frontend.vercel.app",
-        # "https://memobot-yh22.onrender.com",
-        "*"  # Temporaire pour le développement
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "https://memobot-frontend.vercel.app",
+        "https://memobot-yh22.onrender.com",
+        "https://fix-memobot.vercel.app",
+        # "*"  # Temporaire pour le développement
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],

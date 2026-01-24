@@ -3,11 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from datetime import datetime
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user, get_db,get_current_active_user
 from app import schemas, crud
 from app.recommendation import recommendation_engine
 from app.llm_service import répondre_question_cohérente
-
+from app.models import User,ConversationMessage
 router = APIRouter(tags=["ai"])
 
 # Importer dynamiquement le service LLM
@@ -309,37 +309,33 @@ async def chat_with_ai(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Chat intelligent avec FORCE de cohérence"""
+    """Chat intelligent avec contexte utilisateur"""
     try:
-        # Récupérer l'historique complet
-        conversation_history = crud.get_conversation_history(db, current_user.id, limit=20)
+        # Récupérer les préférences utilisateur
+        preference = crud.get_or_create_preference(db, current_user.id)
+        user_preferences = {}
+        if preference:
+            user_preferences = {
+                'level': preference.level,
+                'faculty': preference.faculty,
+                'interests': preference.interests
+            }
         
-        # Construire le contexte de manière SIMPLE mais COMPLÈTE
+        # Récupérer l'historique complet
+        conversation_history = crud.get_conversation_history(db, current_user.id, limit=10)
+        
+        # Construire le contexte de conversation
         history_context = "\n".join([
             f"{'ÉTUDIANT' if h.role == 'user' else 'MEMOBOT'}: {h.content}"
-            for h in conversation_history[-10:]  # 10 derniers messages
+            for h in conversation_history[-5:]  # 5 derniers messages
         ])
         
-        # Ajouter les infos utilisateur
-        preference = crud.get_or_create_preference(db, current_user.id)
-        user_context = ""
-        if preference:
-            user_context += f"Étudiant en {preference.level} " if preference.level else ""
-            user_context += f"à la faculté de {preference.faculty} " if preference.faculty else ""
-            user_context += f"intéressé par: {preference.interests} " if preference.interests else ""
-        
-        # Construire le contexte final
-        full_context = f"""
-        CONTEXTE UTILISATEUR: {user_context}
-        
-        HISTORIQUE COMPLET (du plus ancien au plus récent):
-        {history_context if history_context else "Première conversation"}
-        
-        NOTE CRITIQUE: Tu DOIS rester sur le même sujet que l'historique ci-dessus.
-        """
-        
-        # Obtenir la réponse COHÉRENTE
-        message = répondre_question_cohérente(request.message, full_context)
+        # Obtenir la réponse cohérente AVEC préférences
+        message = répondre_question_cohérente(
+            question=request.message,
+            contexte=history_context,
+            user_preferences=user_preferences
+        )
         
         # Sauvegarder la conversation
         crud.save_conversation_message(
@@ -356,38 +352,43 @@ async def chat_with_ai(
             content=message
         )
         
-        # Suggestions basées sur le contenu
-        suggestions = []
-        message_lower = request.message.lower()
+        # Analyser si on a assez d'infos pour proposer la génération
+        should_show_generate = False
+        if conversation_history:
+            # Compter les messages de l'utilisateur
+            user_messages = [h for h in conversation_history if h.role == 'user']
+            total_user_text = sum(len(msg.content) for msg in user_messages)
+            
+            # Mots-clés indiquant une description complète
+            keywords = ['projet', 'mémoire', 'sujet', 'veux', 'souhaite', 'intéresse', 'domaine']
+            user_text = " ".join([msg.content.lower() for msg in user_messages])
+            keyword_count = sum(1 for kw in keywords if kw in user_text)
+            
+            if total_user_text > 200 and keyword_count >= 3:
+                should_show_generate = True
         
-        if any(word in message_lower for word in ['classification', 'plante', 'médicinal']):
+        suggestions = []
+        if should_show_generate:
             suggestions = [
-                "Je peux vous aider à définir la méthodologie de classification",
-                "Voulez-vous explorer les algorithmes de machine learning adaptés ?",
-                "Parlons des datasets disponibles pour les plantes médicinales"
-            ]
-        elif any(word in message_lower for word in ['sujet', 'mémoire', 'projet']):
-            suggestions = [
-                "Je peux générer 3 sujets spécifiques basés sur notre discussion",
-                "Voulez-vous que j'analyse la faisabilité de votre idée ?",
-                "Parlons de la structure de votre mémoire"
+                "J'ai suffisamment d'informations sur votre projet",
+                "Je peux maintenant générer des sujets pertinents pour vous",
+                "Voulez-vous que je génère 3 sujets basés sur notre discussion ?"
             ]
         
         return {
             "message": message,
             "suggestions": suggestions,
             "actions": [
-                {"text": "🎯 Générer 3 sujets", "action": "generate_three"},
-                {"text": "📊 Analyser la faisabilité", "action": "analyze_feasibility"}
-            ] if 'sujet' in message_lower or 'mémoire' in message_lower else [],
+                {"text": "🎯 Générer 3 sujets", "action": "generate_three"}
+            ] if should_show_generate else [],
             "timestamp": datetime.utcnow().isoformat()
         }
         
     except Exception as e:
         print(f"Erreur dans chat_with_ai: {e}")
         return {
-            "message": "Je rencontre une difficulté technique. Pourriez-vous reformuler votre question en restant sur notre sujet de discussion ?",
-            "suggestions": ["Réessayez en étant plus spécifique", "Reprenez notre sujet précédent"],
+            "message": "Je rencontre une difficulté technique. Pourriez-vous reformuler votre question ?",
+            "suggestions": ["Réessayez en étant plus spécifique"],
             "actions": [],
             "timestamp": datetime.utcnow().isoformat()
         }
@@ -582,6 +583,93 @@ async def analyze_subject(
             ]
         }
 
+@router.post("/generate-from-conversation", response_model=schemas.AIGeneratedSubjects)
+async def generate_subjects_from_conversation(
+    current_user = Depends(get_current_user),  
+    db: Session = Depends(get_db)
+):
+    """Génère 3 sujets basés sur l'historique de conversation"""
+    try:
+        # Récupérer toute la conversation
+        conversation_history = crud.get_conversation_history(db, current_user.id, limit=50)
+        
+        # Extraire le texte de l'utilisateur
+        user_messages = " ".join([
+            h.content for h in conversation_history 
+            if h.role == 'user'
+        ])
+        
+        if not user_messages or len(user_messages) < 100:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Pas assez d'informations dans la conversation. Parlez-moi davantage de votre projet."
+            )
+        
+        # Récupérer les préférences
+        preference = crud.get_or_create_preference(db, current_user.id)
+        
+        # Préparer les paramètres de génération
+        params = {
+            "interests": [user_messages],  # Utiliser toute la conversation comme intérêt
+            "domaine": preference.faculty if preference and preference.faculty else "Général",
+            "niveau": preference.level if preference and preference.level else "Master",
+            "faculté": preference.faculty if preference and preference.faculty else "Sciences"
+        }
+        
+        # Générer 3 sujets
+        generated_subjects = générer_sujets_llm(params, 3)
+        
+        # Créer un identifiant de session
+        import uuid
+        session_id = str(uuid.uuid4())
+        
+        # Formater les sujets
+        formatted_subjects = []
+        for i, subject in enumerate(generated_subjects):
+            formatted_subject = {
+                "session_id": session_id,
+                "index": i,
+                "titre": subject.get("titre", f"Sujet {i+1}"),
+                "description": subject.get("description", ""),
+                "problématique": subject.get("problématique", subject.get("problematique", "")),
+                "keywords": subject.get("keywords", ""),
+                "domaine": subject.get("domaine", params["domaine"]),
+                "niveau": subject.get("niveau", params["niveau"]),
+                "faculté": subject.get("faculté", params["faculté"]),
+                "difficulté": subject.get("difficulté", "moyenne"),
+                "durée_estimée": subject.get("durée_estimée", "6 mois"),
+                "methodologie": subject.get("methodologie", subject.get("méthodologie", "")),
+                "generated_at": subject.get("generated_at", datetime.utcnow().isoformat()),
+                "original": subject.get("original", True)
+            }
+            formatted_subjects.append(formatted_subject)
+        
+        # Sauvegarder cette génération dans l'historique
+        history_data = schemas.UserHistoryCreate(
+            user_id=current_user.id,
+            action="generated_from_conversation",
+            details=f"Généré 3 sujets basés sur une conversation de {len(conversation_history)} messages",
+            metadata={
+                "session_id": session_id,
+                "subject_count": len(formatted_subjects)
+            }
+        )
+        crud.create_user_history(db, history_data)
+        
+        return {
+            "session_id": session_id,
+            "subjects": formatted_subjects,
+            "count": len(formatted_subjects),
+            "message": f"3 sujets générés basés sur notre conversation ({len(conversation_history)} échanges)"
+        }
+        
+    except Exception as e:
+        print(f"Erreur dans generate_from_conversation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la génération: {str(e)}"
+        )
+        
 # Route publique pour le chat sans authentification
 @router.post("/ask-public", response_model=schemas.AIResponse)
 async def ask_question_public(
@@ -682,7 +770,38 @@ async def analyze_subject_public(
                 "Valider la faisabilité technique"
             ]
         }
-@router.post("/reset-conversation", response_model=schemas.AIResponse)
+
+
+# ========== CONVERSATION MANAGEMENT ==========
+def clear_conversation_history(db: Session, user_id: int) -> int:
+    """Supprime l'historique de conversation d'un utilisateur"""
+    deleted_count = db.query(ConversationMessage).filter(
+        ConversationMessage.user_id == user_id
+    ).delete()
+    
+    db.commit()
+    return deleted_count
+
+def get_conversation_history(db: Session, user_id: int, limit: int = 10) -> List[ConversationMessage]:
+    """Récupère l'historique de conversation d'un utilisateur"""
+    return db.query(ConversationMessage).filter(
+        ConversationMessage.user_id == user_id
+    ).order_by(ConversationMessage.timestamp.desc()).limit(limit).all()
+
+def save_conversation_message(db: Session, user_id: int, role: str, content: str) -> ConversationMessage:
+    """Sauvegarde un message de conversation"""
+    db_message = ConversationMessage(
+        user_id=user_id,
+        role=role,
+        content=content,
+        timestamp=datetime.utcnow()
+    )
+    db.add(db_message)
+    db.commit()
+    db.refresh(db_message)
+    return db_message
+
+@router.post("/reset-conversation", response_model=schemas.ResetConversationResponse)
 async def reset_conversation(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -690,20 +809,24 @@ async def reset_conversation(
     """Réinitialise complètement la conversation pour un utilisateur"""
     try:
         # Supprimer l'historique de conversation
-        crud.clear_conversation_history(db, current_user.id)
+        deleted_count = crud.clear_conversation_history(db, current_user.id)
         
         # Ajouter un log d'historique
         history_data = schemas.UserHistoryCreate(
             user_id=current_user.id,
             action="reset_conversation",
-            details="A réinitialisé la conversation avec MemoBot",
-            metadata={"timestamp": datetime.utcnow().isoformat()}
+            details=f"A réinitialisé la conversation avec MemoBot ({deleted_count} messages supprimés)",
+            metadata={
+                "timestamp": datetime.utcnow().isoformat(),
+                "deleted_messages": deleted_count
+            }
         )
         crud.create_user_history(db, history_data)
         
         return {
             "success": True,
-            "message": "Conversation réinitialisée avec succès. Vous pouvez commencer une nouvelle discussion."
+            "message": f"Conversation réinitialisée avec succès. {deleted_count} messages supprimés.",
+            "deleted_count": deleted_count
         }
         
     except Exception as e:

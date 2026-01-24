@@ -453,6 +453,29 @@ async def mark_notification_as_read(
     # Dans une vraie application, vous auriez une table de notifications
     return {"success": True, "message": "Notification marquée comme lue"}
 
+@router.get("/me/preferences")
+async def get_user_preferences(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Récupérer les préférences de l'utilisateur connecté"""
+    try:
+        preference = crud.get_or_create_preference(db, current_user.id)
+        
+        return {
+            "level": preference.level,
+            "faculty": preference.faculty,
+            "interests": preference.interests,
+            "updated_at": preference.updated_at
+        }
+    except Exception as e:
+        print(f"Erreur récupération préférences: {e}")
+        return {
+            "level": "",
+            "faculty": "",
+            "interests": "",
+            "updated_at": datetime.utcnow().isoformat()
+        }
 @router.get("/me/notifications/unread-count")
 async def get_unread_notifications_count(
     current_user: schemas.User = Depends(get_current_user),

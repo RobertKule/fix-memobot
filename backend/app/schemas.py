@@ -451,3 +451,7 @@ class ConversationMessage(ConversationMessageBase):
     
     class Config:
         from_attributes = True
+class ResetConversationResponse(BaseModel):
+    success: bool
+    message: str
+    deleted_count: int

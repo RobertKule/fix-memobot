@@ -1,9 +1,11 @@
 # app/crud.py
+import fastapi
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import json
+from fastapi import Query
 from app.models import (
     User, UserPreference, Sujet, Feedback, 
     UserProfile, UserSkill, UserHistory, 
@@ -63,7 +65,7 @@ def get_sujet(db: Session, sujet_id: int) -> Optional[Sujet]:
 def get_sujets(
     db: Session,
     skip: int = 0,
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     domaine: Optional[str] = None,
     faculté: Optional[str] = None,

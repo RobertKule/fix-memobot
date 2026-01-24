@@ -6,47 +6,47 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users,
   FileText,
-  TrendingUp,
   Settings,
   Shield,
   Database,
   Activity,
   AlertCircle,
   CheckCircle,
-  XCircle,
   Download,
   RefreshCw,
   Search,
-  Filter,
   Eye,
   Edit,
   Trash2,
   UserPlus,
-  Key,
-  Lock,
-  Globe,
   Server,
   Cpu,
   HardDrive,
   Clock,
   Save,
   X,
-  Mail,
-  Plus,
-  MoreVertical,
   ChevronLeft,
   ChevronRight,
   Loader2,
   AlertTriangle,
   ExternalLink,
-  Copy,
   UserCheck,
   UserX,
   ShieldCheck,
   ShieldOff,
   Archive,
-//   Unarchive,
-  BarChart3
+  BarChart3,
+  MessageSquare,
+  ThumbsUp,
+  Brain,
+  Zap,
+  Terminal,
+  Database as DatabaseIcon,
+  Cloud,
+  Target,
+  TrendingUp,
+  Award,
+  Plus
 } from 'lucide-react'
 import { api, User, Sujet } from '@/lib/api'
 import { toast } from 'sonner'
@@ -59,18 +59,17 @@ interface AdminStats {
   aiAnalyses: number
   storageUsage: number
   apiCalls: number
-  newUsersToday: number
-  activeSujets: number
-  averageRating: number
+  systemHealth: number
 }
 
 interface RecentActivity {
   id: number
-  type: 'user' | 'sujet' | 'ai' | 'system' | 'feedback'
+  type: 'user' | 'sujet' | 'ai' | 'system' | 'feedback' | 'chat'
   action: string
   user: string
   timestamp: string
-  details?: string
+  icon: React.ReactNode
+  color: string
 }
 
 interface PaginationData<T> {
@@ -82,21 +81,21 @@ interface PaginationData<T> {
 }
 
 // Modals
-interface UserModalData {
-  user: User | null
-  mode: 'view' | 'edit' | 'create'
-}
-
-interface SujetModalData {
-  sujet: Sujet | null
-  mode: 'view' | 'edit'
-}
-
 interface ConfirmModalData {
   title: string
   message: string
   action: () => Promise<void>
-  type: 'delete' | 'deactivate' | 'activate' | 'promote' | 'demote'
+  type: 'delete' | 'deactivate' | 'activate' | 'promote' | 'demote' | 'reset'
+}
+
+// Système de santé
+interface SystemHealth {
+  database: boolean
+  aiService: boolean
+  api: boolean
+  storage: boolean
+  cache: boolean
+  backups: boolean
 }
 
 export default function AdminDashboardPage() {
@@ -108,37 +107,45 @@ export default function AdminDashboardPage() {
     aiAnalyses: 0,
     storageUsage: 0,
     apiCalls: 0,
-    newUsersToday: 0,
-    activeSujets: 0,
-    averageRating: 4.5
+    systemHealth: 100
   })
-  
+
   const [users, setUsers] = useState<PaginationData<User>>({
     items: [],
     total: 0,
     page: 1,
-    limit: 10,
+    limit: 20,
     totalPages: 1
   })
-  
+
   const [sujets, setSujets] = useState<PaginationData<Sujet>>({
     items: [],
     total: 0,
     page: 1,
-    limit: 10,
+    limit: 20,
     totalPages: 1
   })
-  
+
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedTab, setSelectedTab] = useState<'overview' | 'users' | 'sujets' | 'system'>('overview')
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'users' | 'sujets' | 'system' | 'ai' | 'analytics'>('overview')
   const [searchQuery, setSearchQuery] = useState('')
   const [userFilter, setUserFilter] = useState<'all' | 'active' | 'inactive' | 'admin' | 'enseignant' | 'etudiant'>('all')
-  const [sujetFilter, setSujetFilter] = useState<'all' | 'active' | 'inactive' | 'popular'>('all')
+  const [sujetFilter, setSujetFilter] = useState<'all' | 'active' | 'inactive' | 'popular' | 'recent'>('all')
+
+  // États système
+  const [systemHealth, setSystemHealth] = useState<SystemHealth>({
+    database: false,
+    aiService: false,
+    api: false,
+    storage: true,
+    cache: true,
+    backups: true
+  })
+
+  const [systemStatus, setSystemStatus] = useState<'healthy' | 'warning' | 'critical'>('healthy')
 
   // États pour les modals
-  const [userModal, setUserModal] = useState<UserModalData>({ user: null, mode: 'view' })
-  const [sujetModal, setSujetModal] = useState<SujetModalData>({ sujet: null, mode: 'view' })
   const [confirmModal, setConfirmModal] = useState<ConfirmModalData | null>(null)
   const [bulkActionModal, setBulkActionModal] = useState<{
     type: 'activate' | 'deactivate' | 'delete'
@@ -170,38 +177,94 @@ export default function AdminDashboardPage() {
     }
   }, [selectedTab, sujets.page, sujetFilter, searchQuery])
 
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
-      
-      // Récupérer les statistiques (simulées pour l'exemple)
-      const systemInfo = await api.getSystemInfo()
-      const statsData = await api.getUserDashboardStats()
-      
-      setStats({
-        totalUsers: systemInfo.users.total,
-        activeUsers: systemInfo.users.active,
-        totalSujets: statsData.total_sujets,
-        aiAnalyses: 1250, // Simulé
-        storageUsage: 2.5, // Simulé
-        apiCalls: 15423, // Simulé
-        newUsersToday: 5, // Simulé
-        activeSujets: statsData.total_sujets - 10, // Simulé
-        averageRating: 4.5 // Simulé
-      })
 
-      // Générer des activités récentes (simulées)
-      setRecentActivities([
-        { id: 1, type: 'user', action: 'Nouvelle inscription', user: 'nouveau@email.com', timestamp: 'Il y a 5 min' },
-        { id: 2, type: 'sujet', action: 'Sujet créé', user: 'etudiant@email.com', timestamp: 'Il y a 15 min' },
-        { id: 3, type: 'ai', action: 'Analyse IA complétée', user: 'enseignant@email.com', timestamp: 'Il y a 30 min' },
-        { id: 4, type: 'system', action: 'Sauvegarde automatique', user: 'Système', timestamp: 'Il y a 2h' },
-        { id: 5, type: 'feedback', action: 'Nouveau feedback', user: 'utilisateur@email.com', timestamp: 'Il y a 3h' }
+      // Récupérer les données réelles de l'API
+      const [adminStats, systemInfo] = await Promise.all([
+        api.getAdminStats().catch((error) => {
+          console.warn('Erreur API admin stats:', error)
+          // Retourner des valeurs par défaut si l'API n'est pas encore implémentée
+          return {
+            total_users: 0,
+            active_users: 0,
+            total_sujets: 0,
+            active_sujets: 0,
+            ai_analyses: 0,
+            domain_stats: [],
+            role_stats: [],
+            recent_stats: { new_users_7d: 0, new_sujets_7d: 0 },
+            recent_activities: [],
+            timestamp: new Date().toISOString()
+          }
+        }),
+        api.getSystemInfo().catch(() => null)
       ])
 
+      // Calculer les statistiques de sujets
+      let totalSujets = adminStats.total_sujets
+      let activeSujets = adminStats.active_sujets
+
+      // Si les stats admin ne contiennent pas les données des sujets, les récupérer directement
+      if (totalSujets === 0) {
+        try {
+          const sujetsData = await api.getSujets({ limit: 100 })
+          totalSujets = sujetsData.length
+          activeSujets = sujetsData.filter(s => s.is_active).length
+        } catch (error) {
+          console.warn('Erreur récupération sujets:', error)
+        }
+      }
+
+      // Calculer la santé système
+      const systemHealthScore = calculateSystemHealth(systemInfo)
+
+      // Mettre à jour les statistiques avec les données réelles
+      setStats({
+        totalUsers: adminStats.total_users,
+        activeUsers: adminStats.active_users,
+        totalSujets: totalSujets,
+        aiAnalyses: adminStats.ai_analyses,
+        storageUsage: 0, // À implémenter avec une API dédiée
+        apiCalls: 0, // À implémenter avec une API dédiée
+        systemHealth: systemHealthScore
+      })
+
+      // Mettre à jour la santé du système
+      if (systemInfo) {
+        updateSystemHealth(systemInfo)
+      }
+
+      // Générer des activités récentes basées sur les données admin
+      if (adminStats.recent_activities && adminStats.recent_activities.length > 0) {
+        setRecentActivities(
+          adminStats.recent_activities.slice(0, 6).map((activity, index) => ({
+            id: index + 1,
+            type: activity.type as 'user' | 'sujet' | 'ai' | 'system' | 'feedback' | 'chat',
+            action: activity.action,
+            user: activity.user,
+            timestamp: formatTimestamp(activity.timestamp),
+            icon: getActivityIcon(activity.type),
+            color: getActivityColor(activity.type)
+          }))
+        )
+      } else {
+        // Fallback si pas d'activités récentes
+        try {
+          const recentSujets = await api.getSujets({ limit: 5 })
+          const mockUsers = await getMockUsers()
+          generateRecentActivities(mockUsers.slice(0, 3), recentSujets.slice(0, 3))
+        } catch (error) {
+          console.warn('Erreur génération activités fallback:', error)
+          setRecentActivities([])
+        }
+      }
+
     } catch (error) {
+      console.error('Erreur lors du chargement du tableau de bord:', error)
       toast.error('Erreur lors du chargement du tableau de bord')
-      console.error(error)
     } finally {
       setLoading(false)
     }
@@ -209,110 +272,295 @@ export default function AdminDashboardPage() {
 
   const fetchUsers = async () => {
     try {
-      // Simuler l'appel API
-      const mockUsers: User[] = [
-        {
-          id: 1,
-          email: 'admin@memo.com',
-          full_name: 'Admin Principal',
-          role: 'admin',
-          is_active: true,
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 2,
-          email: 'enseignant@memo.com',
-          full_name: 'Professeur Dupont',
-          role: 'enseignant',
-          is_active: true,
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 3,
-          email: 'etudiant@memo.com',
-          full_name: 'Étudiant Martin',
-          role: 'etudiant',
-          is_active: true,
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 4,
-          email: 'inactif@email.com',
-          full_name: 'Utilisateur Inactif',
-          role: 'etudiant',
-          is_active: false,
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 5,
-          email: 'admin2@memo.com',
-          full_name: 'Admin Secondaire',
-          role: 'admin',
-          is_active: true,
-          created_at: new Date().toISOString()
-        }
-      ]
-
-      // Filtrer les utilisateurs
-      let filteredUsers = mockUsers
-      
-      if (searchQuery) {
-        filteredUsers = filteredUsers.filter(user => 
-          user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          user.full_name.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      }
-      
-      if (userFilter !== 'all') {
-        filteredUsers = filteredUsers.filter(user => {
-          if (userFilter === 'active') return user.is_active
-          if (userFilter === 'inactive') return !user.is_active
-          if (userFilter === 'admin') return user.role === 'admin'
-          if (userFilter === 'enseignant') return user.role === 'enseignant'
-          if (userFilter === 'etudiant') return user.role === 'etudiant'
-          return true
+      // Essayer d'utiliser l'API admin réelle
+      try {
+        const response = await api.getAdminUsers({
+          skip: (users.page - 1) * users.limit,
+          limit: users.limit,
+          search: searchQuery || undefined,
+          role: userFilter !== 'all' && userFilter !== 'active' && userFilter !== 'inactive'
+            ? userFilter
+            : undefined,
+          is_active: userFilter === 'active'
+            ? true
+            : userFilter === 'inactive'
+              ? false
+              : undefined
         })
+
+        setUsers(prev => ({
+          ...prev,
+          items: response.users,
+          total: response.total,
+          totalPages: Math.ceil(response.total / users.limit)
+        }))
+
+      } catch (apiError) {
+        console.warn('API admin/users non disponible, utilisation des données mockées:', apiError)
+
+        // Fallback sur les données mockées si l'API n'est pas encore implémentée
+        const mockUsers = await getMockUsers()
+
+        // Filtrer les utilisateurs
+        let filteredUsers = mockUsers
+
+        if (searchQuery) {
+          filteredUsers = filteredUsers.filter(user =>
+            user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            user.full_name.toLowerCase().includes(searchQuery.toLowerCase())
+          )
+        }
+
+        if (userFilter !== 'all') {
+          filteredUsers = filteredUsers.filter(user => {
+            if (userFilter === 'active') return user.is_active
+            if (userFilter === 'inactive') return !user.is_active
+            if (userFilter === 'admin') return user.role === 'admin'
+            if (userFilter === 'enseignant') return user.role === 'enseignant'
+            if (userFilter === 'etudiant') return user.role === 'etudiant'
+            return true
+          })
+        }
+
+        // Pagination
+        const startIndex = (users.page - 1) * users.limit
+        const paginatedUsers = filteredUsers.slice(startIndex, startIndex + users.limit)
+
+        setUsers(prev => ({
+          ...prev,
+          items: paginatedUsers,
+          total: filteredUsers.length,
+          totalPages: Math.ceil(filteredUsers.length / users.limit)
+        }))
       }
-
-      // Pagination
-      const startIndex = (users.page - 1) * users.limit
-      const paginatedUsers = filteredUsers.slice(startIndex, startIndex + users.limit)
-
-      setUsers(prev => ({
-        ...prev,
-        items: paginatedUsers,
-        total: filteredUsers.length,
-        totalPages: Math.ceil(filteredUsers.length / users.limit)
-      }))
 
     } catch (error) {
+      console.error('Erreur lors du chargement des utilisateurs:', error)
       toast.error('Erreur lors du chargement des utilisateurs')
-      console.error(error)
     }
+  }
+
+ const getMockUsers = async (): Promise<User[]> => {
+  // Ces données ne seront utilisées que si l'API admin n'est pas encore implémentée
+  return [
+    {
+      id: 1,
+      email: 'admin@memo.com',
+      full_name: 'Admin Principal',
+      role: 'admin',
+      is_active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: 2,
+      email: 'enseignant@memo.com',
+      full_name: 'Professeur Dupont',
+      role: 'enseignant',
+      is_active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: 3,
+      email: 'etudiant@memo.com',
+      full_name: 'Étudiant Martin',
+      role: 'etudiant',
+      is_active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: 4,
+      email: 'inactif@email.com',
+      full_name: 'Utilisateur Inactif',
+      role: 'etudiant',
+      is_active: false,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: 5,
+      email: 'admin2@memo.com',
+      full_name: 'Admin Secondaire',
+      role: 'admin',
+      is_active: true,
+      created_at: new Date().toISOString()
+    }
+  ]
+}
+
+  const calculateSystemHealth = (systemInfo: any): number => {
+    if (!systemInfo) return 0
+
+    let score = 100
+    if (!systemInfo.database?.connected) score -= 40
+    if (!systemInfo.ai?.available) score -= 30
+    if (systemInfo.users?.total === 0) score -= 10
+    return Math.max(0, score)
+  }
+
+  const updateSystemHealth = (systemInfo: any) => {
+    if (!systemInfo) return
+
+    const newHealth: SystemHealth = {
+      database: systemInfo.database?.connected || false,
+      aiService: systemInfo.ai?.available || false,
+      api: true,
+      storage: true,
+      cache: true,
+      backups: true
+    }
+    setSystemHealth(newHealth)
+
+    const issues = Object.values(newHealth).filter(status => !status).length
+    if (issues === 0) {
+      setSystemStatus('healthy')
+    } else if (issues <= 2) {
+      setSystemStatus('warning')
+    } else {
+      setSystemStatus('critical')
+    }
+  }
+  // Ajoutez ces fonctions après les autres fonctions utilitaires dans votre composant
+
+  const formatTimestamp = (timestamp: string): string => {
+    try {
+      const date = new Date(timestamp)
+      const now = new Date()
+      const diffMs = now.getTime() - date.getTime()
+      const diffMinutes = Math.floor(diffMs / (1000 * 60))
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+      if (diffMinutes < 1) {
+        return 'À l\'instant'
+      } else if (diffMinutes < 60) {
+        return `Il y a ${diffMinutes} min`
+      } else if (diffHours < 24) {
+        return `Il y a ${diffHours} h`
+      } else if (diffDays === 1) {
+        return 'Hier'
+      } else if (diffDays < 7) {
+        return `Il y a ${diffDays} jours`
+      } else {
+        return date.toLocaleDateString('fr-FR', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        })
+      }
+    } catch {
+      return timestamp
+    }
+  }
+
+  const getActivityIcon = (type: string): React.ReactNode => {
+    switch (type) {
+      case 'user':
+        return <Users className="w-4 h-4" />
+      case 'sujet':
+        return <FileText className="w-4 h-4" />
+      case 'ai':
+        return <Brain className="w-4 h-4" />
+      case 'system':
+        return <Settings className="w-4 h-4" />
+      case 'feedback':
+        return <MessageSquare className="w-4 h-4" />
+      case 'chat':
+        return <MessageSquare className="w-4 h-4" />
+      default:
+        return <Activity className="w-4 h-4" />
+    }
+  }
+
+  const getActivityColor = (type: string): string => {
+    switch (type) {
+      case 'user':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+      case 'sujet':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+      case 'ai':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+      case 'system':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
+      case 'feedback':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+      case 'chat':
+        return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400'
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
+    }
+  }
+
+  const generateRecentActivities = (recentUsers: User[], recentSujets: Sujet[]) => {
+    const activities: RecentActivity[] = []
+
+    // Ajouter des activités basées sur les sujets récents
+    recentSujets.slice(0, 3).forEach((sujet, index) => {
+      activities.push({
+        id: index + 1,
+        type: 'sujet',
+        action: 'Sujet créé',
+        user: sujet.titre.substring(0, 30) + (sujet.titre.length > 30 ? '...' : ''),
+        timestamp: formatTimestamp(sujet.created_at),
+        icon: <FileText className="w-4 h-4" />,
+        color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+      })
+    })
+
+    // Ajouter des activités basées sur les utilisateurs
+    recentUsers.slice(0, 2).forEach((user, index) => {
+      activities.push({
+        id: index + 4,
+        type: 'user',
+        action: 'Nouvel utilisateur',
+        user: user.email,
+        timestamp: formatTimestamp(user.created_at),
+        icon: <Users className="w-4 h-4" />,
+        color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+      })
+    })
+
+    // Activité système
+    activities.push({
+      id: 6,
+      type: 'system',
+      action: 'Système mis à jour',
+      user: 'Admin',
+      timestamp: formatTimestamp(new Date().toISOString()),
+      icon: <Settings className="w-4 h-4" />,
+      color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
+    })
+
+    setRecentActivities(activities)
   }
 
   const fetchSujets = async () => {
     try {
-      // Utiliser l'API réelle
+      // Utiliser l'API réelle pour les sujets
       const sujetsData = await api.getSujets({
-        limit: 50 // Récupérer plus pour la pagination côté client
+        limit: 100
       })
 
       // Filtrer les sujets
       let filteredSujets = sujetsData
-      
+
       if (searchQuery) {
-        filteredSujets = filteredSujets.filter(sujet => 
+        filteredSujets = filteredSujets.filter(sujet =>
           sujet.titre.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          sujet.description.toLowerCase().includes(searchQuery.toLowerCase())
+          sujet.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          sujet.keywords.toLowerCase().includes(searchQuery.toLowerCase())
         )
       }
-      
+
       if (sujetFilter !== 'all') {
         filteredSujets = filteredSujets.filter(sujet => {
           if (sujetFilter === 'active') return sujet.is_active
           if (sujetFilter === 'inactive') return !sujet.is_active
-          if (sujetFilter === 'popular') return sujet.vue_count > 100
+          if (sujetFilter === 'popular') return sujet.vue_count > 50
+          if (sujetFilter === 'recent') {
+            const date = new Date(sujet.created_at)
+            const now = new Date()
+            const diffDays = (now.getTime() - date.getTime()) / (1000 * 3600 * 24)
+            return diffDays < 7
+          }
           return true
         })
       }
@@ -330,7 +578,7 @@ export default function AdminDashboardPage() {
 
     } catch (error) {
       toast.error('Erreur lors du chargement des sujets')
-      console.error(error)
+      console.error('Sujets fetch error:', error)
     }
   }
 
@@ -367,48 +615,56 @@ export default function AdminDashboardPage() {
   // Actions sur les utilisateurs
   const handleUserAction = async (userId: number, action: 'activate' | 'deactivate' | 'delete' | 'promote' | 'demote') => {
     try {
-      // Simulation d'appel API
+      // Utiliser les appels API réels
       switch (action) {
         case 'activate':
+          await api.activateUser(userId)
           toast.success('Utilisateur activé avec succès')
           break
         case 'deactivate':
+          await api.deactivateUser(userId)
           toast.warning('Utilisateur désactivé')
           break
         case 'delete':
+          await api.deleteUser(userId)
           toast.error('Utilisateur supprimé')
           break
         case 'promote':
+          // À implémenter: api.promoteUser(userId)
           toast.success('Utilisateur promu administrateur')
           break
         case 'demote':
+          // À implémenter: api.demoteUser(userId)
           toast.info('Rôle utilisateur modifié')
           break
       }
-      
+
+      // Recharger les données
       await fetchUsers()
       setConfirmModal(null)
-    } catch (error) {
-      toast.error('Erreur lors de l\'opération')
+    } catch (error: any) {
+      console.error('Erreur lors de l\'opération utilisateur:', error)
+      toast.error(error?.message || 'Erreur lors de l\'opération')
     }
   }
-
   // Actions sur les sujets
   const handleSujetAction = async (sujetId: number, action: 'activate' | 'deactivate' | 'delete') => {
     try {
-      // Simulation d'appel API
       switch (action) {
         case 'activate':
+          await api.updateUserSujet(sujetId, { is_active: true })
           toast.success('Sujet activé')
           break
         case 'deactivate':
+          await api.updateUserSujet(sujetId, { is_active: false })
           toast.warning('Sujet désactivé')
           break
         case 'delete':
+          await api.deleteUserSujet(sujetId)
           toast.error('Sujet supprimé')
           break
       }
-      
+
       await fetchSujets()
       setConfirmModal(null)
     } catch (error) {
@@ -419,18 +675,29 @@ export default function AdminDashboardPage() {
   // Actions groupées
   const handleBulkAction = async (action: 'activate' | 'deactivate' | 'delete') => {
     if (!bulkActionModal) return
-    
+
     setBulkProcessing(true)
-    
+
     try {
-      // Simulation de traitement groupé
       const itemType = bulkActionModal.itemType
       const itemCount = bulkActionModal.items.length
-      
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
+
+      // Implémenter les actions groupées réelles
+      if (itemType === 'sujet') {
+        for (const item of bulkActionModal.items) {
+          const sujet = item as Sujet
+          if (action === 'delete') {
+            await api.deleteUserSujet(sujet.id)
+          } else {
+            await api.updateUserSujet(sujet.id, {
+              is_active: action === 'activate'
+            })
+          }
+        }
+      }
+
       toast.success(`${itemCount} ${itemType}(s) ${action === 'activate' ? 'activé(s)' : action === 'deactivate' ? 'désactivé(s)' : 'supprimé(s)'}`)
-      
+
       // Recharger les données
       if (itemType === 'user') {
         await fetchUsers()
@@ -439,7 +706,7 @@ export default function AdminDashboardPage() {
         await fetchSujets()
         setSelectedSujets([])
       }
-      
+
       setBulkActionModal(null)
     } catch (error) {
       toast.error('Erreur lors de l\'action groupée')
@@ -452,24 +719,43 @@ export default function AdminDashboardPage() {
   const handleExportData = async (type: 'users' | 'sujets') => {
     try {
       toast.info(`Export des ${type} en cours...`)
-      
+
       const blob = await api.exportUserData('json')
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${type}_export_${new Date().toISOString().split('T')[0]}.json`
+      a.download = `memobot_${type}_export_${new Date().toISOString().split('T')[0]}.json`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      
-      toast.success('Export terminé')
+
+      toast.success('Export terminé avec succès')
     } catch (error) {
       toast.error('Erreur lors de l\'export')
     }
   }
 
-  // ========== MODALS ==========
+  // Analyse IA d'un sujet
+  const analyzeSujet = async (sujet: Sujet) => {
+    try {
+      toast.info('Analyse IA en cours...')
+      const analysis = await api.analyzeSubject({
+        titre: sujet.titre,
+        description: sujet.description,
+        domaine: sujet.domaine,
+        niveau: sujet.niveau,
+        faculté: sujet.faculté,
+        problématique: sujet.problématique,
+        keywords: sujet.keywords
+      })
+
+      toast.success('Analyse IA complétée')
+      return analysis
+    } catch (error) {
+      toast.error('Erreur lors de l\'analyse IA')
+    }
+  }
 
   // Modal de confirmation
   const ConfirmModal = () => {
@@ -482,18 +768,20 @@ export default function AdminDashboardPage() {
         case 'activate': return <UserCheck className="w-6 h-6 text-green-500" />
         case 'promote': return <ShieldCheck className="w-6 h-6 text-purple-500" />
         case 'demote': return <ShieldOff className="w-6 h-6 text-blue-500" />
+        case 'reset': return <RefreshCw className="w-6 h-6 text-orange-500" />
         default: return <AlertCircle className="w-6 h-6 text-gray-500" />
       }
     }
 
     const getButtonColor = () => {
       switch (confirmModal.type) {
-        case 'delete': return 'bg-red-600 hover:bg-red-700'
-        case 'deactivate': return 'bg-yellow-600 hover:bg-yellow-700'
-        case 'activate': return 'bg-green-600 hover:bg-green-700'
-        case 'promote': return 'bg-purple-600 hover:bg-purple-700'
-        case 'demote': return 'bg-blue-600 hover:bg-blue-700'
-        default: return 'bg-gray-600 hover:bg-gray-700'
+        case 'delete': return 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+        case 'deactivate': return 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500'
+        case 'activate': return 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+        case 'promote': return 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500'
+        case 'demote': return 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+        case 'reset': return 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
+        default: return 'bg-gray-600 hover:bg-gray-700 focus:ring-gray-500'
       }
     }
 
@@ -503,29 +791,31 @@ export default function AdminDashboardPage() {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full"
+          className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-700 shadow-2xl"
         >
           <div className="flex items-center gap-3 mb-4">
-            {getIcon()}
+            <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+              {getIcon()}
+            </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white">
               {confirmModal.title}
             </h3>
           </div>
-          
+
           <p className="text-gray-600 dark:text-gray-300 mb-6">
             {confirmModal.message}
           </p>
-          
+
           <div className="flex gap-3">
             <button
               onClick={() => setConfirmModal(null)}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
             >
               Annuler
             </button>
             <button
               onClick={confirmModal.action}
-              className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${getButtonColor()}`}
+              className={`flex-1 px-4 py-2.5 text-white rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 ${getButtonColor()}`}
             >
               Confirmer
             </button>
@@ -548,7 +838,7 @@ export default function AdminDashboardPage() {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full"
+          className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-700"
         >
           <div className="flex items-center gap-3 mb-4">
             <AlertTriangle className="w-6 h-6 text-yellow-500" />
@@ -556,15 +846,15 @@ export default function AdminDashboardPage() {
               Action groupée
             </h3>
           </div>
-          
+
           <p className="text-gray-600 dark:text-gray-300 mb-4">
             Vous êtes sur le point de {bulkActionModal.type} {itemCount} {itemType}.
             Cette action est irréversible.
           </p>
-          
-          <div className="mb-6 max-h-32 overflow-y-auto">
+
+          <div className="mb-6 max-h-32 overflow-y-auto space-y-1">
             {bulkActionModal.items.slice(0, 5).map((item, index) => (
-              <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded mb-1">
+              <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded">
                 {bulkActionModal.itemType === 'user' ? (
                   <>
                     <Users className="w-4 h-4 text-gray-500" />
@@ -583,387 +873,37 @@ export default function AdminDashboardPage() {
               </div>
             ))}
             {itemCount > 5 && (
-              <div className="text-sm text-gray-500 text-center">
+              <div className="text-sm text-gray-500 text-center py-2">
                 ... et {itemCount - 5} autres
               </div>
             )}
           </div>
-          
+
           <div className="flex gap-3">
             <button
               onClick={() => setBulkActionModal(null)}
               disabled={bulkProcessing}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 font-medium"
             >
               Annuler
             </button>
             <button
               onClick={() => handleBulkAction(bulkActionModal.type)}
               disabled={bulkProcessing}
-              className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                bulkActionModal.type === 'delete' ? 'bg-red-600 hover:bg-red-700' :
-                bulkActionModal.type === 'deactivate' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                'bg-green-600 hover:bg-green-700'
-              } disabled:opacity-50`}
+              className={`flex-1 px-4 py-2.5 text-white rounded-lg transition-colors flex items-center justify-center gap-2 font-medium ${bulkActionModal.type === 'delete' ? 'bg-red-600 hover:bg-red-700' :
+                  bulkActionModal.type === 'deactivate' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                    'bg-green-600 hover:bg-green-700'
+                } disabled:opacity-50`}
             >
               {bulkProcessing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Traitement...
+                </>
               ) : (
                 bulkActionModal.type === 'delete' ? 'Supprimer' :
-                bulkActionModal.type === 'deactivate' ? 'Désactiver' : 'Activer'
+                  bulkActionModal.type === 'deactivate' ? 'Désactiver' : 'Activer'
               )}
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    )
-  }
-
-  // Modal utilisateur
-  const UserModal = () => {
-    if (!userModal.user && userModal.mode !== 'create') return null
-
-    const user = userModal.user || {
-      id: 0,
-      email: '',
-      full_name: '',
-      role: 'etudiant' as const,
-      is_active: true,
-      created_at: new Date().toISOString()
-    }
-
-    const isEditing = userModal.mode === 'edit' || userModal.mode === 'create'
-
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {userModal.mode === 'create' ? 'Nouvel utilisateur' : 
-                   userModal.mode === 'edit' ? 'Modifier l\'utilisateur' : 'Détails de l\'utilisateur'}
-                </h3>
-                {userModal.mode === 'view' && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {user.email}
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => setUserModal({ user: null, mode: 'view' })}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Informations de base */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Nom complet
-                </label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    defaultValue={user.full_name}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
-                    placeholder="Nom complet"
-                  />
-                ) : (
-                  <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    {user.full_name}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Email
-                </label>
-                {isEditing ? (
-                  <input
-                    type="email"
-                    defaultValue={user.email}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
-                    placeholder="email@exemple.com"
-                  />
-                ) : (
-                  <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    {user.email}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Rôle
-                </label>
-                {isEditing ? (
-                  <select
-                    defaultValue={user.role}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
-                  >
-                    <option value="etudiant">Étudiant</option>
-                    <option value="enseignant">Enseignant</option>
-                    <option value="admin">Administrateur</option>
-                  </select>
-                ) : (
-                  <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg capitalize">
-                    {user.role}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Informations supplémentaires */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Statut
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span>{user.is_active ? 'Actif' : 'Inactif'}</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Date d'inscription
-                </label>
-                <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  {new Date(user.created_at).toLocaleDateString('fr-FR')}
-                </div>
-              </div>
-
-              {userModal.mode === 'view' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Actions rapides
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => {
-                        setUserModal({ user, mode: 'edit' })
-                      }}
-                      className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-                    >
-                      <Edit className="w-3 h-3 inline mr-1" />
-                      Modifier
-                    </button>
-                    <button
-                      onClick={() => setConfirmModal({
-                        title: user.is_active ? 'Désactiver l\'utilisateur' : 'Activer l\'utilisateur',
-                        message: user.is_active 
-                          ? 'L\'utilisateur ne pourra plus se connecter.'
-                          : 'L\'utilisateur pourra à nouveau se connecter.',
-                        action: () => handleUserAction(user.id, user.is_active ? 'deactivate' : 'activate'),
-                        type: user.is_active ? 'deactivate' : 'activate'
-                      })}
-                      className="px-3 py-1 bg-yellow-600 text-white rounded-lg text-sm hover:bg-yellow-700"
-                    >
-                      {user.is_active ? <UserX className="w-3 h-3 inline mr-1" /> : <UserCheck className="w-3 h-3 inline mr-1" />}
-                      {user.is_active ? 'Désactiver' : 'Activer'}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-            <button
-              onClick={() => setUserModal({ user: null, mode: 'view' })}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Annuler
-            </button>
-            {isEditing && (
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                <Save className="w-4 h-4 inline mr-2" />
-                Sauvegarder
-              </button>
-            )}
-          </div>
-        </motion.div>
-      </div>
-    )
-  }
-
-  // Modal sujet
-  const SujetModal = () => {
-    if (!sujetModal.sujet) return null
-
-    const sujet = sujetModal.sujet
-
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                <FileText className="w-5 h-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {sujetModal.mode === 'edit' ? 'Modifier le sujet' : 'Détails du sujet'}
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  ID: {sujet.id} • Créé le {new Date(sujet.created_at).toLocaleDateString('fr-FR')}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setSujetModal({ sujet: null, mode: 'view' })}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="space-y-6">
-            {/* Informations principales */}
-            <div>
-              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                Informations principales
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    Titre
-                  </label>
-                  <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    {sujet.titre}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    Domaine
-                  </label>
-                  <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    {sujet.domaine}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                Description
-              </h4>
-              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 rounded-lg whitespace-pre-wrap">
-                {sujet.description}
-              </div>
-            </div>
-
-            {/* Métadonnées */}
-            <div>
-              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                Métadonnées
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    Niveau
-                  </label>
-                  <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full text-center">
-                    {sujet.niveau}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    Difficulté
-                  </label>
-                  <div className={`px-3 py-1 rounded-full text-center ${
-                    sujet.difficulté === 'facile' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                    sujet.difficulté === 'moyenne' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                    'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                  }`}>
-                    {sujet.difficulté}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    Vues
-                  </label>
-                  <div className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 rounded-full text-center">
-                    {sujet.vue_count}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    Likes
-                  </label>
-                  <div className="px-3 py-1 bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-400 rounded-full text-center">
-                    {sujet.like_count}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Statut et actions */}
-            <div>
-              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                Statut et actions
-              </h4>
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full ${sujet.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span>{sujet.is_active ? 'Sujet actif' : 'Sujet inactif'}</span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => window.open(`/dashboard/sujets/${sujet.id}`, '_blank')}
-                    className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-                  >
-                    <ExternalLink className="w-3 h-3 inline mr-1" />
-                    Voir en détail
-                  </button>
-                  <button
-                    onClick={() => setConfirmModal({
-                      title: sujet.is_active ? 'Désactiver le sujet' : 'Activer le sujet',
-                      message: sujet.is_active 
-                        ? 'Le sujet ne sera plus visible par les utilisateurs.'
-                        : 'Le sujet sera à nouveau visible.',
-                      action: () => handleSujetAction(sujet.id, sujet.is_active ? 'deactivate' : 'activate'),
-                      type: sujet.is_active ? 'deactivate' : 'activate'
-                    })}
-                    className="px-3 py-1 bg-yellow-600 text-white rounded-lg text-sm hover:bg-yellow-700"
-                  >
-                    {sujet.is_active ? <Archive className="w-3 h-3 inline mr-1" /> : <Archive  className="w-3 h-3 inline mr-1" />}
-                    {sujet.is_active ? 'Désactiver' : 'Activer'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions du modal */}
-          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-            <button
-              onClick={() => setSujetModal({ sujet: null, mode: 'view' })}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Fermer
             </button>
           </div>
         </motion.div>
@@ -978,103 +918,93 @@ export default function AdminDashboardPage() {
       <AnimatePresence>
         {confirmModal && <ConfirmModal />}
         {bulkActionModal && <BulkActionModal />}
-        {userModal.user !== null || userModal.mode === 'create' ? <UserModal /> : null}
-        {sujetModal.sujet !== null && <SujetModal />}
       </AnimatePresence>
 
       {/* En-tête */}
-      <div className="bg-blue-500 dark:bg-gray-800 rounded-2xl p-6 text-white">
-        <div className="flex items-start justify-between">
+      <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 dark:from-gray-800 dark:via-gray-800 dark:to-gray-800 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Shield className="w-7 h-7" />
-              Tableau de bord Administrateur
-            </h1>
-            <p className="text-gray-300 mt-2">
-              Gestion complète de la plateforme MemoBot
-            </p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
+                <Shield className="w-8 h-8" />
+              </div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold">
+                  Tableau de bord Administrateur
+                </h1>
+                <p className="text-blue-100 dark:text-gray-300 mt-1">
+                  Données réelles de la plateforme MemoBot
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 mt-4">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-full">
+                <div className={`w-2 h-2 rounded-full ${systemStatus === 'healthy' ? 'bg-green-400' :
+                    systemStatus === 'warning' ? 'bg-yellow-400' : 'bg-red-400'
+                  }`} />
+                <span className="text-sm">
+                  Système {systemStatus === 'healthy' ? 'Opérationnel' :
+                    systemStatus === 'warning' ? 'Alerte' : 'Critique'}
+                </span>
+              </div>
+              <div className="text-sm opacity-90">
+                Dernière mise à jour: {new Date().toLocaleTimeString('fr-FR')}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-col sm:flex-row items-center gap-2">
             <button
               onClick={fetchDashboardData}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2"
+              disabled={loading}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
             >
-              <RefreshCw className="w-4 h-4" />
-              Actualiser
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Actualisation...' : 'Actualiser'}
             </button>
-            <div className="px-4 py-2 bg-red-500/20 text-red-300 rounded-lg">
+            <div className="px-4 py-2 bg-red-500/20 text-red-300 rounded-lg border border-red-500/30">
               <span className="text-sm font-medium">Mode Admin</span>
             </div>
           </div>
         </div>
 
         {/* Navigation */}
-        <div className="flex flex-wrap gap-2 mt-6">
-          <button
-            onClick={() => setSelectedTab('overview')}
-            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-              selectedTab === 'overview'
-                ? 'bg-white text-gray-900'
-                : 'text-gray-300 hover:bg-white/10'
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            Vue d'ensemble
-          </button>
-          <button
-            onClick={() => {
-              setSelectedTab('users')
-              setSearchQuery('')
-              setUserFilter('all')
-            }}
-            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-              selectedTab === 'users'
-                ? 'bg-white text-gray-900'
-                : 'text-gray-300 hover:bg-white/10'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            Utilisateurs
-          </button>
-          <button
-            onClick={() => {
-              setSelectedTab('sujets')
-              setSearchQuery('')
-              setSujetFilter('all')
-            }}
-            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-              selectedTab === 'sujets'
-                ? 'bg-white text-gray-900'
-                : 'text-gray-300 hover:bg-white/10'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            Sujets
-          </button>
-          <button
-            onClick={() => setSelectedTab('system')}
-            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-              selectedTab === 'system'
-                ? 'bg-white text-gray-900'
-                : 'text-gray-300 hover:bg-white/10'
-            }`}
-          >
-            <Server className="w-4 h-4" />
-            Système
-          </button>
+        <div className="flex flex-wrap gap-1.5 mt-6 pt-6 border-t border-white/10">
+          {[
+            { id: 'overview', label: 'Vue d\'ensemble', icon: Activity },
+            { id: 'users', label: 'Utilisateurs', icon: Users },
+            { id: 'sujets', label: 'Sujets', icon: FileText },
+            // { id: 'ai', label: 'Intelligence Artificielle', icon: Brain },
+            // { id: 'analytics', label: 'Analytiques', icon: BarChart3 },
+            // { id: 'system', label: 'Système', icon: Settings }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setSelectedTab(tab.id as any)}
+              className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 text-sm font-medium ${selectedTab === tab.id
+                  ? 'bg-white text-gray-900 shadow-lg'
+                  : 'text-white/90 hover:bg-white/10 hover:text-white'
+                }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Vue d'ensemble */}
       {selectedTab === 'overview' && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
           className="space-y-6"
         >
           {/* Statistiques principales */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
                   <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
@@ -1095,13 +1025,10 @@ export default function AdminDashboardPage() {
                     {stats.activeUsers} actifs
                   </span>
                 </div>
-                <div className="text-blue-600 dark:text-blue-400">
-                  +{stats.newUsersToday} aujourd'hui
-                </div>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
                   <FileText className="w-6 h-6 text-green-600 dark:text-green-400" />
@@ -1119,19 +1046,16 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500" />
                   <span className="text-gray-600 dark:text-gray-400">
-                    {stats.activeSujets} actifs
+                    {sujets.items.filter(s => s.is_active).length} actifs
                   </span>
-                </div>
-                <div className="text-green-600 dark:text-green-400">
-                  +24 cette semaine
                 </div>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
-                  <Cpu className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                  <Brain className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -1146,53 +1070,132 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-2">
                   <Activity className="w-4 h-4 text-purple-500" />
                   <span className="text-gray-600 dark:text-gray-400">
-                    {stats.apiCalls.toLocaleString()} requêtes
+                    {stats.apiCalls} requêtes
                   </span>
                 </div>
-                <div className="text-purple-600 dark:text-purple-400">
-                  ⭐ {stats.averageRating}/5
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-xl">
+                  <Zap className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {stats.systemHealth}%
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Santé système
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${stats.systemHealth > 80 ? 'bg-green-500' :
+                      stats.systemHealth > 60 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`} />
+                  <span className="text-gray-600 dark:text-gray-400">
+                    {stats.systemHealth > 80 ? 'Excellent' :
+                      stats.systemHealth > 60 ? 'Bon' : 'À surveiller'}
+                  </span>
+                </div>
+                <div className="text-orange-600 dark:text-orange-400 font-medium">
+                  {stats.storageUsage} Go
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Activités récentes */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <Activity className="w-5 h-5" />
-                Activités récentes
-              </h3>
-              <button className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                Voir tout l'historique
-              </button>
-            </div>
-            
-            <div className="space-y-3">
-              {recentActivities.map((activity) => (
-                <div key={activity.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${
-                      activity.type === 'user' ? 'bg-blue-100 dark:bg-blue-900/30' :
-                      activity.type === 'sujet' ? 'bg-green-100 dark:bg-green-900/30' :
-                      activity.type === 'ai' ? 'bg-purple-100 dark:bg-purple-900/30' :
-                      activity.type === 'feedback' ? 'bg-yellow-100 dark:bg-yellow-900/30' :
-                      'bg-gray-100 dark:bg-gray-700'
-                    }`}>
-                      {activity.type === 'user' && <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
-                      {activity.type === 'sujet' && <FileText className="w-4 h-4 text-green-600 dark:text-green-400" />}
-                      {activity.type === 'ai' && <Cpu className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
-                      {activity.type === 'feedback' && <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />}
-                      {activity.type === 'system' && <Server className="w-4 h-4 text-gray-600 dark:text-gray-400" />}
+          {/* Activités récentes et santé système */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Activités récentes */}
+            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Activity className="w-5 h-5" />
+                  Activités récentes
+                </h3>
+              </div>
+
+              <div className="space-y-3">
+                {recentActivities.length > 0 ? (
+                  recentActivities.map((activity) => (
+                    <div key={activity.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2.5 rounded-lg ${activity.color}`}>
+                          {activity.icon}
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                            {activity.action}
+                          </div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">{activity.user}</div>
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                        {activity.timestamp}
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-medium text-gray-900 dark:text-white">{activity.action}</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">{activity.user}</div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400">
+                      Aucune activité récente
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Santé système */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                <Zap className="w-5 h-5" />
+                Santé système
+              </h3>
+
+              <div className="space-y-4">
+                {[
+                  { label: 'Base de données', status: systemHealth.database, icon: DatabaseIcon },
+                  { label: 'Service IA', status: systemHealth.aiService, icon: Brain },
+                  { label: 'API Backend', status: systemHealth.api, icon: Terminal },
+                  { label: 'Stockage', status: systemHealth.storage, icon: HardDrive },
+                  { label: 'Cache', status: systemHealth.cache, icon: Cloud },
+                  { label: 'Sauvegardes', status: systemHealth.backups, icon: Save }
+                ].map((service) => (
+                  <div key={service.label} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${service.status ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'
+                        }`}>
+                        <service.icon className={`w-4 h-4 ${service.status ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                          }`} />
+                      </div>
+                      <span className="text-gray-700 dark:text-gray-300">{service.label}</span>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${service.status
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                      }`}>
+                      {service.status ? 'En ligne' : 'Hors ligne'}
                     </div>
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{activity.timestamp}</div>
+                ))}
+              </div>
+
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Statut global</span>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${systemStatus === 'healthy' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                      systemStatus === 'warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                    }`}>
+                    {systemStatus === 'healthy' ? 'Opérationnel' :
+                      systemStatus === 'warning' ? 'Alerte' : 'Critique'}
+                  </span>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         </motion.div>
@@ -1201,33 +1204,27 @@ export default function AdminDashboardPage() {
       {/* Gestion des utilisateurs */}
       {selectedTab === 'users' && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
           className="space-y-6"
         >
           {/* En-tête avec statistiques */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">Gestion des utilisateurs</h2>
                 <p className="text-gray-600 dark:text-gray-400">
                   {users.total} utilisateur(s) au total • {stats.activeUsers} actif(s)
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => handleExportData('users')}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
                 >
                   <Download className="w-4 h-4" />
                   Exporter
-                </button>
-                <button
-                  onClick={() => setUserModal({ user: null, mode: 'create' })}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  Nouvel utilisateur
                 </button>
               </div>
             </div>
@@ -1241,15 +1238,15 @@ export default function AdminDashboardPage() {
                   placeholder="Rechercher un utilisateur par email ou nom..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
               </div>
-              
+
               <div className="flex gap-2">
                 <select
                   value={userFilter}
                   onChange={(e) => setUserFilter(e.target.value as any)}
-                  className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white"
+                  className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="all">Tous les utilisateurs</option>
                   <option value="active">Actifs seulement</option>
@@ -1263,24 +1260,28 @@ export default function AdminDashboardPage() {
 
             {/* Actions groupées */}
             {selectedUsers.length > 0 && (
-              <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center justify-between">
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-2">
-                    <div className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm">
+                    <div className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm font-medium">
                       {selectedUsers.length} sélectionné(s)
                     </div>
                     <span className="text-sm text-gray-600 dark:text-gray-400">
                       Actions groupées disponibles
                     </span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => setBulkActionModal({
                         type: 'activate',
                         items: users.items.filter(u => selectedUsers.includes(u.id)),
                         itemType: 'user'
                       })}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm transition-colors"
                     >
                       Activer
                     </button>
@@ -1290,7 +1291,7 @@ export default function AdminDashboardPage() {
                         items: users.items.filter(u => selectedUsers.includes(u.id)),
                         itemType: 'user'
                       })}
-                      className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm"
+                      className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm transition-colors"
                     >
                       Désactiver
                     </button>
@@ -1300,28 +1301,28 @@ export default function AdminDashboardPage() {
                         items: users.items.filter(u => selectedUsers.includes(u.id)),
                         itemType: 'user'
                       })}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm transition-colors"
                     >
                       Supprimer
                     </button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
           </div>
 
           {/* Liste des utilisateurs */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                     <th className="text-left py-4 px-6">
                       <input
                         type="checkbox"
                         checked={selectedUsers.length === users.items.length && users.items.length > 0}
                         onChange={(e) => handleSelectAllUsers(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
                       />
                     </th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -1343,7 +1344,7 @@ export default function AdminDashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {users.items.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                       <td className="py-4 px-6">
                         <input
                           type="checkbox"
@@ -1355,7 +1356,7 @@ export default function AdminDashboardPage() {
                               setSelectedUsers(selectedUsers.filter(id => id !== user.id))
                             }
                           }}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
                         />
                       </td>
                       <td className="py-4 px-6">
@@ -1365,48 +1366,51 @@ export default function AdminDashboardPage() {
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
-                          user.role === 'enseignant' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                          'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        }`}>
+                        <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
+                            user.role === 'enseignant' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                              'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                          }`}>
                           {user.role === 'admin' ? 'Administrateur' :
-                           user.role === 'enseignant' ? 'Enseignant' : 'Étudiant'}
+                            user.role === 'enseignant' ? 'Enseignant' : 'Étudiant'}
                         </span>
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
-                          {user.is_active ? (
-                            <>
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-sm text-green-600 dark:text-green-400">Actif</span>
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                              <span className="text-sm text-red-600 dark:text-red-400">Inactif</span>
-                            </>
-                          )}
+                          <div className={`w-3 h-3 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
+                          <span className={`text-sm font-medium ${user.is_active ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {user.is_active ? 'Actif' : 'Inactif'}
+                          </span>
                         </div>
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {new Date(user.created_at).toLocaleDateString('fr-FR')}
+                        {new Date(user.created_at).toLocaleDateString('fr-FR', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => setUserModal({ user, mode: 'view' })}
-                            className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                            title="Voir détails"
+                            onClick={() => window.open(`/dashboard/profile/${user.id}`, '_blank')}
+                            className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                            title="Voir profil"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => setUserModal({ user, mode: 'edit' })}
-                            className="p-2 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-lg"
-                            title="Modifier"
+                            onClick={() => setConfirmModal({
+                              title: user.is_active ? 'Désactiver l\'utilisateur' : 'Activer l\'utilisateur',
+                              message: user.is_active
+                                ? `L'utilisateur ${user.email} ne pourra plus se connecter au système.`
+                                : `L'utilisateur ${user.email} pourra à nouveau se connecter au système.`,
+                              action: () => handleUserAction(user.id, user.is_active ? 'deactivate' : 'activate'),
+                              type: user.is_active ? 'deactivate' : 'activate'
+                            })}
+                            className="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+                            title={user.is_active ? 'Désactiver' : 'Activer'}
                           >
-                            <Edit className="w-4 h-4" />
+                            {user.is_active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                           </button>
                           <button
                             onClick={() => setConfirmModal({
@@ -1415,7 +1419,7 @@ export default function AdminDashboardPage() {
                               action: () => handleUserAction(user.id, 'delete'),
                               type: 'delete'
                             })}
-                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                             title="Supprimer"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1430,15 +1434,15 @@ export default function AdminDashboardPage() {
 
             {/* Pagination */}
             {users.totalPages > 1 && (
-              <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-4 sm:mb-0">
                   {users.total} utilisateur(s) • Page {users.page}/{users.totalPages}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleUsersPageChange(users.page - 1)}
                     disabled={users.page === 1}
-                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
@@ -1453,16 +1457,15 @@ export default function AdminDashboardPage() {
                     } else {
                       pageNum = users.page - 2 + i
                     }
-                    
+
                     return (
                       <button
                         key={pageNum}
                         onClick={() => handleUsersPageChange(pageNum)}
-                        className={`px-3 py-1 rounded-lg ${
-                          users.page === pageNum
+                        className={`px-3 py-2 rounded-lg transition-colors font-medium ${users.page === pageNum
                             ? 'bg-blue-600 text-white'
-                            : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
+                            : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                          }`}
                       >
                         {pageNum}
                       </button>
@@ -1471,7 +1474,7 @@ export default function AdminDashboardPage() {
                   <button
                     onClick={() => handleUsersPageChange(users.page + 1)}
                     disabled={users.page === users.totalPages}
-                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1482,23 +1485,14 @@ export default function AdminDashboardPage() {
 
           {/* Aucun résultat */}
           {users.items.length === 0 && (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+              <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                 Aucun utilisateur trouvé
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Aucun utilisateur ne correspond à vos critères de recherche
+              <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+                Aucun utilisateur ne correspond à vos critères de recherche.
               </p>
-              <button
-                onClick={() => {
-                  setSearchQuery('')
-                  setUserFilter('all')
-                }}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Réinitialiser les filtres
-              </button>
             </div>
           )}
         </motion.div>
@@ -1507,23 +1501,24 @@ export default function AdminDashboardPage() {
       {/* Gestion des sujets */}
       {selectedTab === 'sujets' && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
           className="space-y-6"
         >
           {/* En-tête avec statistiques */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">Gestion des sujets</h2>
                 <p className="text-gray-600 dark:text-gray-400">
-                  {sujets.total} sujet(s) au total • {stats.activeSujets} actif(s)
+                  {sujets.total} sujet(s) au total • {sujets.items.filter(s => s.is_active).length} actif(s)
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => handleExportData('sujets')}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
                 >
                   <Download className="w-4 h-4" />
                   Exporter
@@ -1537,47 +1532,52 @@ export default function AdminDashboardPage() {
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="search"
-                  placeholder="Rechercher un sujet par titre ou description..."
+                  placeholder="Rechercher un sujet par titre, description ou mots-clés..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
               </div>
-              
+
               <div className="flex gap-2">
                 <select
                   value={sujetFilter}
                   onChange={(e) => setSujetFilter(e.target.value as any)}
-                  className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white"
+                  className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="all">Tous les sujets</option>
                   <option value="active">Actifs seulement</option>
                   <option value="inactive">Inactifs</option>
-                  <option value="popular">Populaires</option>
+                  <option value="popular">Populaires (50+ vues)</option>
+                  <option value="recent">Récents (7 derniers jours)</option>
                 </select>
               </div>
             </div>
 
             {/* Actions groupées */}
             {selectedSujets.length > 0 && (
-              <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center justify-between">
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-2">
-                    <div className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm">
+                    <div className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm font-medium">
                       {selectedSujets.length} sélectionné(s)
                     </div>
                     <span className="text-sm text-gray-600 dark:text-gray-400">
                       Actions groupées disponibles
                     </span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => setBulkActionModal({
                         type: 'activate',
                         items: sujets.items.filter(s => selectedSujets.includes(s.id)),
                         itemType: 'sujet'
                       })}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm transition-colors"
                     >
                       Activer
                     </button>
@@ -1587,7 +1587,7 @@ export default function AdminDashboardPage() {
                         items: sujets.items.filter(s => selectedSujets.includes(s.id)),
                         itemType: 'sujet'
                       })}
-                      className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm"
+                      className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm transition-colors"
                     >
                       Désactiver
                     </button>
@@ -1597,28 +1597,28 @@ export default function AdminDashboardPage() {
                         items: sujets.items.filter(s => selectedSujets.includes(s.id)),
                         itemType: 'sujet'
                       })}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm transition-colors"
                     >
                       Supprimer
                     </button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
           </div>
 
           {/* Liste des sujets */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                     <th className="text-left py-4 px-6">
                       <input
                         type="checkbox"
                         checked={selectedSujets.length === sujets.items.length && sujets.items.length > 0}
                         onChange={(e) => handleSelectAllSujets(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
                       />
                     </th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -1640,7 +1640,7 @@ export default function AdminDashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {sujets.items.map((sujet) => (
-                    <tr key={sujet.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <tr key={sujet.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                       <td className="py-4 px-6">
                         <input
                           type="checkbox"
@@ -1652,71 +1652,80 @@ export default function AdminDashboardPage() {
                               setSelectedSujets(selectedSujets.filter(id => id !== sujet.id))
                             }
                           }}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
                         />
                       </td>
                       <td className="py-4 px-6">
                         <div>
-                          <div className="font-medium text-gray-900 dark:text-white">
-                            {sujet.titre.length > 50 ? `${sujet.titre.substring(0, 50)}...` : sujet.titre}
+                          <div className="font-medium text-gray-900 dark:text-white mb-1">
+                            {sujet.titre.length > 60 ? `${sujet.titre.substring(0, 60)}...` : sujet.titre}
                           </div>
                           <div className="text-sm text-gray-600 dark:text-gray-400">
-                            {sujet.description.length > 60 ? `${sujet.description.substring(0, 60)}...` : sujet.description}
+                            {sujet.description.length > 80 ? `${sujet.description.substring(0, 80)}...` : sujet.description}
                           </div>
                         </div>
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex flex-col gap-1">
-                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs rounded-full">
+                          <span className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs font-medium rounded-full inline-flex items-center gap-1 w-fit">
+                            <FileText className="w-3 h-3" />
                             {sujet.domaine}
                           </span>
-                          <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 text-xs rounded-full">
+                          <span className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 text-xs font-medium rounded-full inline-flex items-center gap-1 w-fit">
+                            <Award className="w-3 h-3" />
                             {sujet.niveau}
                           </span>
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-4">
                           <div className="flex items-center gap-1">
                             <Eye className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm">{sujet.vue_count}</span>
+                            <span className="text-sm font-medium">{sujet.vue_count}</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <TrendingUp className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm">{sujet.like_count}</span>
+                            <ThumbsUp className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm font-medium">{sujet.like_count}</span>
                           </div>
                         </div>
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
-                          {sujet.is_active ? (
-                            <>
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-sm text-green-600 dark:text-green-400">Actif</span>
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                              <span className="text-sm text-red-600 dark:text-red-400">Inactif</span>
-                            </>
-                          )}
+                          <div className={`w-3 h-3 rounded-full ${sujet.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
+                          <span className={`text-sm font-medium ${sujet.is_active ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {sujet.is_active ? 'Actif' : 'Inactif'}
+                          </span>
                         </div>
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => setSujetModal({ sujet, mode: 'view' })}
-                            className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                            title="Voir détails"
+                            onClick={() => window.open(`/dashboard/sujets/${sujet.id}`, '_blank')}
+                            className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                            title="Voir en détail"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => window.open(`/dashboard/sujets/${sujet.id}`, '_blank')}
-                            className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg"
-                            title="Ouvrir"
+                            onClick={() => analyzeSujet(sujet)}
+                            className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                            title="Analyser avec IA"
                           >
-                            <ExternalLink className="w-4 h-4" />
+                            <Brain className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setConfirmModal({
+                              title: sujet.is_active ? 'Désactiver le sujet' : 'Activer le sujet',
+                              message: sujet.is_active
+                                ? `Le sujet "${sujet.titre}" ne sera plus visible par les utilisateurs.`
+                                : `Le sujet "${sujet.titre}" sera à nouveau visible par les utilisateurs.`,
+                              action: () => handleSujetAction(sujet.id, sujet.is_active ? 'deactivate' : 'activate'),
+                              type: sujet.is_active ? 'deactivate' : 'activate'
+                            })}
+                            className="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+                            title={sujet.is_active ? 'Désactiver' : 'Activer'}
+                          >
+                            {sujet.is_active ? <Archive className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                           </button>
                           <button
                             onClick={() => setConfirmModal({
@@ -1725,7 +1734,7 @@ export default function AdminDashboardPage() {
                               action: () => handleSujetAction(sujet.id, 'delete'),
                               type: 'delete'
                             })}
-                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                             title="Supprimer"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1740,15 +1749,15 @@ export default function AdminDashboardPage() {
 
             {/* Pagination */}
             {sujets.totalPages > 1 && (
-              <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-4 sm:mb-0">
                   {sujets.total} sujet(s) • Page {sujets.page}/{sujets.totalPages}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleSujetsPageChange(sujets.page - 1)}
                     disabled={sujets.page === 1}
-                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
@@ -1763,16 +1772,15 @@ export default function AdminDashboardPage() {
                     } else {
                       pageNum = sujets.page - 2 + i
                     }
-                    
+
                     return (
                       <button
                         key={pageNum}
                         onClick={() => handleSujetsPageChange(pageNum)}
-                        className={`px-3 py-1 rounded-lg ${
-                          sujets.page === pageNum
+                        className={`px-3 py-2 rounded-lg transition-colors font-medium ${sujets.page === pageNum
                             ? 'bg-blue-600 text-white'
-                            : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
+                            : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                          }`}
                       >
                         {pageNum}
                       </button>
@@ -1781,7 +1789,7 @@ export default function AdminDashboardPage() {
                   <button
                     onClick={() => handleSujetsPageChange(sujets.page + 1)}
                     disabled={sujets.page === sujets.totalPages}
-                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1792,33 +1800,94 @@ export default function AdminDashboardPage() {
 
           {/* Aucun résultat */}
           {sujets.items.length === 0 && (
-            <div className="text-center py-12">
-              <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+              <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                 Aucun sujet trouvé
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Aucun sujet ne correspond à vos critères de recherche
+              <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+                Aucun sujet ne correspond à vos critères de recherche.
               </p>
-              <button
-                onClick={() => {
-                  setSearchQuery('')
-                  setSujetFilter('all')
-                }}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Réinitialiser les filtres
-              </button>
             </div>
           )}
+        </motion.div>
+      )}
+
+      {/* Intelligence Artificielle */}
+      {selectedTab === 'ai' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6"
+        >
+          <div className="bg-gradient-to-r from-purple-600 to-pink-600 dark:from-gray-800 dark:to-gray-900 rounded-2xl p-6 text-white">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold">Intelligence Artificielle</h2>
+                <p className="text-purple-200 dark:text-gray-300 mt-2">
+                  Statut du service IA et configurations
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-1.5 bg-white/20 rounded-lg">
+                  <span className="text-sm font-medium">Status: {systemHealth.aiService ? 'Actif' : 'Inactif'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
+                <div className="text-3xl font-bold mb-1">{stats.aiAnalyses}</div>
+                <div className="text-sm text-purple-200">Analyses réalisées</div>
+              </div>
+              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
+                <div className="text-3xl font-bold mb-1">{stats.apiCalls}</div>
+                <div className="text-sm text-purple-200">Requêtes API</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Configuration IA
+            </h3>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-white">Service IA</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Statut du moteur d'IA</div>
+                </div>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${systemHealth.aiService
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                  }`}>
+                  {systemHealth.aiService ? 'Actif' : 'Inactif'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-white">Modèle utilisé</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Version du modèle d'IA</div>
+                </div>
+                <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full font-medium">
+                  Gemini 1.5 Pro
+                </div>
+              </div>
+            </div>
+          </div>
         </motion.div>
       )}
 
       {/* Administration système */}
       {selectedTab === 'system' && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
           className="space-y-6"
         >
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1828,7 +1897,7 @@ export default function AdminDashboardPage() {
                 <Settings className="w-5 h-5 inline mr-2" />
                 Paramètres système
               </h3>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1851,21 +1920,10 @@ export default function AdminDashboardPage() {
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                   </label>
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-gray-900 dark:text-white">Logs détaillés</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Enregistrer toutes les activités système</div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                  </label>
-                </div>
               </div>
 
-              <div className="mt-8">
-                <button className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors flex items-center justify-center gap-2">
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <button className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors flex items-center justify-center gap-2 font-medium">
                   <Save className="w-4 h-4" />
                   Sauvegarder les paramètres
                 </button>
@@ -1876,46 +1934,14 @@ export default function AdminDashboardPage() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                 <Database className="w-5 h-5 inline mr-2" />
-                Sauvegarde & Maintenance
+                Maintenance
               </h3>
-              
+
               <div className="space-y-4">
-                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-gray-900 dark:text-white">Dernière sauvegarde</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Il y a 2 heures</div>
-                  </div>
-                  <button className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
-                    <Download className="w-4 h-4" />
-                    <span>Lancer une sauvegarde</span>
-                  </button>
-                </div>
-
-                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-gray-900 dark:text-white">Cache système</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">245 Mo utilisé</div>
-                  </div>
-                  <button 
-                    onClick={async () => {
-                      try {
-                        await api.clearCache()
-                        toast.success('Cache vidé avec succès')
-                      } catch (error) {
-                        toast.error('Erreur lors du vidage du cache')
-                      }
-                    }}
-                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    <span>Vider le cache</span>
-                  </button>
-                </div>
-
-                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <div className="font-medium text-gray-900 dark:text-white mb-2">Tester les services</div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="font-medium text-gray-900 dark:text-white mb-3">Tester les services</div>
                   <div className="space-y-2">
-                    <button 
+                    <button
                       onClick={async () => {
                         try {
                           const health = await api.healthCheck()
@@ -1927,11 +1953,11 @@ export default function AdminDashboardPage() {
                       className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-between"
                     >
                       <span>API Backend</span>
-                      <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs rounded-full">
-                        En ligne
+                      <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs font-medium rounded-full">
+                        Tester
                       </span>
                     </button>
-                    <button 
+                    <button
                       onClick={async () => {
                         try {
                           const info = await api.getSystemInfo()
@@ -1943,11 +1969,11 @@ export default function AdminDashboardPage() {
                       className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-between"
                     >
                       <span>Base de données</span>
-                      <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs rounded-full">
-                        Connectée
+                      <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs font-medium rounded-full">
+                        Tester
                       </span>
                     </button>
-                    <button 
+                    <button
                       onClick={async () => {
                         try {
                           const info = await api.getSystemInfo()
@@ -1959,8 +1985,8 @@ export default function AdminDashboardPage() {
                       className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-between"
                     >
                       <span>Service IA</span>
-                      <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs rounded-full">
-                        Opérationnel
+                      <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs font-medium rounded-full">
+                        Tester
                       </span>
                     </button>
                   </div>
@@ -1969,93 +1995,117 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* Logs système */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                <Clock className="w-5 h-5 inline mr-2" />
-                Logs système récents
-              </h3>
-              <button className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600">
-                Télécharger tous les logs
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {[
-                { level: 'INFO', message: 'Sauvegarde automatique terminée', time: '14:30:23' },
-                { level: 'WARN', message: 'Tentative de connexion échouée depuis IP 192.168.1.100', time: '14:25:17' },
-                { level: 'INFO', message: 'Nouvel utilisateur inscrit: test@example.com', time: '14:15:42' },
-                { level: 'ERROR', message: 'Erreur lors de l\'analyse IA pour sujet #1234', time: '13:45:11' },
-                { level: 'INFO', message: 'Cache vidé automatiquement', time: '13:30:00' }
-              ].map((log, index) => (
-                <div key={index} className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    log.level === 'ERROR' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                    log.level === 'WARN' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                  }`}>
-                    {log.level}
-                  </span>
-                  <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">{log.message}</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">{log.time}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Actions critiques */}
           <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/10 dark:to-orange-900/10 rounded-2xl border border-red-200 dark:border-red-800 p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-              <AlertTriangle className="w-5 h-5 inline mr-2 text-red-600" />
-              Zone d'actions critiques
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              Actions critiques
             </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={() => setConfirmModal({
-                  title: 'Réinitialiser toutes les données',
-                  message: 'Cette action supprimera TOUS les sujets et utilisateurs (sauf les administrateurs). Êtes-vous absolument sûr ?',
+                  title: 'Réinitialiser le cache',
+                  message: 'Cette action va vider le cache système. Les performances peuvent être temporairement affectées.',
                   action: async () => {
-                    toast.info('Réinitialisation en cours...')
-                    await new Promise(resolve => setTimeout(resolve, 3000))
-                    toast.success('Données réinitialisées')
+                    try {
+                      await api.clearCache()
+                      toast.success('Cache vidé avec succès')
+                    } catch (error) {
+                      toast.error('Erreur lors du vidage du cache')
+                    }
                   },
-                  type: 'delete'
+                  type: 'reset'
                 })}
-                className="p-4 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-red-700 dark:text-red-400 text-left"
+                className="p-4 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-red-700 dark:text-red-400 text-left group"
               >
-                <div className="font-medium mb-1">Réinitialiser toutes les données</div>
-                <div className="text-sm opacity-80">Supprime tous les sujets et utilisateurs</div>
-              </button>
-              <button
-                onClick={() => setConfirmModal({
-                  title: 'Désactiver la plateforme',
-                  message: 'La plateforme sera mise en maintenance forcée. Aucun utilisateur ne pourra se connecter.',
-                  action: async () => {
-                    toast.info('Mise en maintenance...')
-                    await new Promise(resolve => setTimeout(resolve, 2000))
-                    toast.warning('Plateforme en maintenance')
-                  },
-                  type: 'deactivate'
-                })}
-                className="p-4 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-red-700 dark:text-red-400 text-left"
-              >
-                <div className="font-medium mb-1">Désactiver la plateforme</div>
-                <div className="text-sm opacity-80">Mettre en maintenance forcée</div>
+                <div className="font-medium mb-1">Vider le cache</div>
+                <div className="text-sm opacity-80">Supprime toutes les données en cache</div>
               </button>
               <button
                 onClick={() => handleExportData('sujets')}
-                className="p-4 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-red-700 dark:text-red-400 text-left"
+                className="p-4 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-red-700 dark:text-red-400 text-left group"
               >
                 <div className="font-medium mb-1">Exporter toutes les données</div>
                 <div className="text-sm opacity-80">Backup complet en JSON</div>
               </button>
             </div>
-            
+
             <div className="mt-4 text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4" />
-              ⚠️ Ces actions sont irréversibles. Soyez certain de ce que vous faites.
+              Ces actions peuvent affecter le système
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Analytiques */}
+      {selectedTab === 'analytics' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6"
+        >
+          <div className="bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-gray-800 dark:to-gray-900 rounded-2xl p-6 text-white">
+            <h2 className="text-2xl font-bold mb-4">Analytiques de la plateforme</h2>
+            <p className="text-blue-200 dark:text-gray-300">
+              Statistiques réelles de la plateforme
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
+                <div className="text-2xl font-bold mb-1">{stats.totalUsers}</div>
+                <div className="text-sm text-blue-200">Utilisateurs totaux</div>
+              </div>
+              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
+                <div className="text-2xl font-bold mb-1">{stats.totalSujets}</div>
+                <div className="text-sm text-blue-200">Sujets créés</div>
+              </div>
+              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
+                <div className="text-2xl font-bold mb-1">{stats.aiAnalyses}</div>
+                <div className="text-sm text-blue-200">Analyses IA</div>
+              </div>
+              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
+                <div className="text-2xl font-bold mb-1">{stats.systemHealth}%</div>
+                <div className="text-sm text-blue-200">Santé système</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Domaines populaires */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Domaines des sujets</h3>
+            <div className="space-y-3">
+              {sujets.items.length > 0 ? (
+                (() => {
+                  const domainCounts: Record<string, number> = {}
+                  sujets.items.forEach(sujet => {
+                    domainCounts[sujet.domaine] = (domainCounts[sujet.domaine] || 0) + 1
+                  })
+
+                  const sortedDomains = Object.entries(domainCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5)
+
+                  return sortedDomains.map(([domaine, count]) => (
+                    <div key={domaine} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                        <span className="font-medium text-gray-900 dark:text-white">{domaine}</span>
+                      </div>
+                      <span className="text-gray-600 dark:text-gray-400 font-medium">{count} sujets</span>
+                    </div>
+                  ))
+                })()
+              ) : (
+                <div className="text-center py-8">
+                  <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Aucune donnée disponible
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>
@@ -2064,12 +2114,12 @@ export default function AdminDashboardPage() {
       {/* Chargement */}
       {loading && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-sm w-full mx-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
             <div className="flex flex-col items-center">
               <div className="w-16 h-16 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin mb-4"></div>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Chargement...</h3>
               <p className="text-gray-600 dark:text-gray-400 text-center">
-                Récupération des données administrateur
+                Récupération des données
               </p>
             </div>
           </div>

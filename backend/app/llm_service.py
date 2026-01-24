@@ -524,12 +524,12 @@ def recommander_sujets_llm(
 
     **FORMAT DE RÉPONSE (JSON):**
     [
-      {{
+{{
         "id": 1,
         "score": 85,
         "raisons": ["Raison 1", "Raison 2"],
         "critères": ["Critère 1", "Critère 2"]
-      }}
+}}
     ]
 
     Retourne seulement les 3-5 sujets les plus pertinents, triés par score décroissant.
@@ -568,85 +568,205 @@ def recommander_sujets_llm(
 # ======================
 # RÉPONSE À UNE QUESTION
 # ======================
-
 def répondre_question(question: str, contexte: str = None) -> str:
-    """Répond à une question avec LangChain, en tant que MemoBot aligné sur les critères du doyen."""
+    """Répond DIRECTEMENT aux questions - version SIMPLIFIÉE et DIRECTE"""
     if not llm:
-        return (
-            "Bonjour ! Je suis MemoBot, mais le service IA est temporairement indisponible. "
-            "Veuillez consulter votre enseignant ou le doyen pour des conseils personnalisés."
-        )
-
-    criteria = get_acceptance_criteria()
-
-    prompt_template = """
-    Tu es MemoBot, un expert-conseil pour les sujets de mémoire universitaire.
-    Tu aides les étudiants à trouver, affiner et évaluer leurs sujets, en particulier dans les domaines :
-    - Deep Learning, Machine Learning, IA
-    - Bases de données
-    - Génie logiciel
-    - Data Science
-    - Domaines techniques similaires
-
-    Tu dois t'aligner sur les directives suivantes issues du doyen de faculté :
-
-    CRITÈRES D'ACCEPTATION PRINCIPAUX:
-    {criteres_acceptation}
-
-    CRITÈRES DE REJET FRÉQUENTS:
-    {criteres_rejet}
-
-    MESSAGE DU DOYEN (résumé):
-    {message_doyen}
-
-    QUESTION DE L'ÉTUDIANT:
-    {question}
-
-    CONTEXTE SUPPLÉMENTAIRE (optionnel):
-    {contexte}
-
-    INSTRUCTIONS DE RÉPONSE:
-    1. Commence par une courte phrase d'accueil du type:
-       "Bonjour ! Je suis MemoBot, votre expert-conseil pour les sujets de mémoire..."
-    2. Si la question est vague, pose 2-3 questions ciblées pour clarifier:
-       - domaine principal (Deep Learning, base de données, IA, etc.)
-       - type d'application (vision, NLP, recommandations, etc.)
-       - contraintes (temps, données disponibles, niveau)
-    3. Propose des pistes concrètes de sujets ou d'angles de travail.
-    4. Indique quand c'est pertinent si un sujet risque d'être:
-       - trop ambitieux,
-       - trop simple (projet de cours),
-       - ou déjà trop classique.
-    5. Reste encourageant, professionnel, et en français naturel.
-    6. Quand c'est utile, rappelle 1 ou 2 critères du doyen pour expliquer tes conseils.
-
-    RÉPONSE:
+        return f"D'accord, je comprends ta question : '{question}'. Pourrais-tu me dire plus précisément ce que tu recherches ?"
+    
+    # PROMPT ULTRA SIMPLE - PAS DE FORMALITÉS
+    prompt = f"""
+    Tu es MemoBot, assistant conversationnel pour aider les étudiants à trouver des sujets de mémoire.
+    
+    **TÂCHE :** Réponds DIRECTEMENT et NATURELLEMENT à la question de l'étudiant.
+    **STYLE :** Comme si tu parlais à un ami - simple, direct, utile.
+    **NE FAIS PAS :** Ne commence pas par "Bonjour, je suis MemoBot..."
+    **NE FAIS PAS :** Ne liste pas des questions en retour automatiquement
+    
+    CONTEXTE (si utile) :
+    {contexte or 'Pas de contexte'}
+    
+    QUESTION DE L'ÉTUDIANT :
+    "{question}"
+    
+    TA RÉPONSE (directe, naturelle, utile) :
     """
-
+    
     try:
-        prompt = ChatPromptTemplate.from_template(prompt_template)
-        chain = prompt | llm | StrOutputParser()
-
-        contexte_text = contexte or "Aucun contexte supplémentaire fourni."
-
-        message = chain.invoke(
-            {
-                "question": question,
-                "contexte": contexte_text,
-                "criteres_acceptation": "\n- " + "\n- ".join(criteria["critères_acceptation"]),
-                "criteres_rejet": "\n- " + "\n- ".join(criteria["critères_rejet"]),
-                "message_doyen": criteria.get("message_doyen", ""),
-            }
-        )
-
-        return message
+        # Appel DIRECT sans LangChain complexe
+        response = llm.invoke(prompt)
+        
+        # Extraire le texte
+        if hasattr(response, 'content'):
+            answer = response.content.strip()
+        else:
+            answer = str(response).strip()
+        
+        # NETTOYAGE : Enlever les salutations automatiques
+        unwanted_starts = [
+            "Bonjour ! Je suis MemoBot",
+            "Je suis MemoBot",
+            "En tant que MemoBot",
+            "Bonjour,",
+            "Salut,",
+            "Hello,",
+        ]
+        
+        for unwanted in unwanted_starts:
+            if answer.startswith(unwanted):
+                # Garder seulement après la salutation
+                answer = answer[len(unwanted):].strip()
+                # Supprimer la ponctuation qui suit
+                if answer.startswith(','):
+                    answer = answer[1:].strip()
+                if answer.startswith('!'):
+                    answer = answer[1:].strip()
+        
+        # Si la réponse est vide ou trop courte, réponse alternative
+        if not answer or len(answer) < 10:
+            return f"D'accord, je comprends que tu cherches : '{question}'. Qu'est-ce qui t'intéresse particulièrement dans ce domaine ?"
+        
+        return answer
+        
     except Exception as e:
-        print(f"⚠️ Erreur message LangChain: {e}")
-        return (
-            "Je ne peux pas répondre pour le moment à cause d'un problème technique. "
-            "Veuillez réessayer plus tard ou demander conseil à un enseignant."
-        )
+        print(f"⚠️ Erreur dans répondre_question: {e}")
+        return f"Je vois que tu parles de '{question[:50]}...'. C'est intéressant ! Dis-m'en plus sur ce que tu recherches exactement."
 
+def répondre_question_cohérente(question: str, contexte: str = None) -> str:
+    """Version qui FORCE la cohérence avec l'historique - AMÉLIORÉE"""
+    if not llm:
+        return f"Je comprends : '{question}'. Pourrais-tu préciser par rapport à notre discussion ?"
+    
+    # Analyse DÉTAILLÉE du contexte pour détecter le sujet en cours
+    sujet_en_cours = None
+    mots_clés_sujet = []
+    
+    if contexte:
+        # Liste étendue de mots-clés pour détecter les sujets
+        sujets_mots_cles = {
+            "plantes médicinales": ["plante", "médicinal", "herbe", "botanique", "phytothérapie", "classification plantes"],
+            "génie civil": ["civil", "construction", "bâtiment", "infrastructure", "ouvrage"],
+            "sécurité": ["sécurité", "protection", "surveillance", "sécurisé", "défense"],
+            "ia machine learning": ["ia", "intelligence artificielle", "machine learning", "deep learning", "réseau neuronal"],
+            "mémoire académique": ["mémoire", "thèse", "projet", "sujet", "recherche", "universitaire"],
+            "application mobile": ["mobile", "application", "app", "smartphone", "android", "ios"],
+            "gestion stage": ["stage", "entreprise", "professionnel", "alternance", "emploi"]
+        }
+        
+        contexte_lower = contexte.lower()
+        question_lower = question.lower()
+        
+        # Chercher le sujet le plus pertinent
+        scores_sujets = {}
+        for sujet, mots in sujets_mots_cles.items():
+            score = 0
+            for mot in mots:
+                if mot in contexte_lower:
+                    score += 2
+                if mot in question_lower:
+                    score += 1
+            if score > 0:
+                scores_sujets[sujet] = score
+                mots_clés_sujet.extend(mots)
+        
+        # Prendre le sujet avec le score le plus élevé
+        if scores_sujets:
+            sujet_en_cours = max(scores_sujets.items(), key=lambda x: x[1])[0]
+    
+    # Créer un prompt BEAUCOUP PLUS STRICT
+    prompt = f"""
+    TU ES MEMOBOT - ASSISTANT ACADÉMIQUE SPÉCIALISÉ
+    
+    **⚠️ RÈGLES ABSOLUMENT OBLIGATOIRES :**
+    1. RESTE SUR LE SUJET PRÉCIS DE LA CONVERSATION
+    2. NE CHANGE JAMAIS DE SUJET BRUSQUEMENT
+    3. SI L'ÉTUDIANT CHANGE DE SUJET, RAPPELLE-LUI LE SUJET EN COURS
+    4. SOIS SPÉCIFIQUE ET TECHNIQUE DANS TES RÉPONSES
+    5. NE FAIS PAS DE GÉNÉRALITÉS HORS SUJET
+    
+    **📌 SUJET ACTUEL DE LA CONVERSATION :**
+    {sujet_en_cours if sujet_en_cours else "Aucun sujet spécifique détecté (début de conversation)"}
+    
+    **🗨️ HISTORIQUE RÉCENT DE LA DISCUSSION :**
+    {contexte if contexte else "Premier message de l'étudiant"}
+    
+    **❓ NOUVELLE QUESTION DE L'ÉTUDIANT :**
+    "{question}"
+    
+    **📝 TA RÉPONSE (DOIT ÊTRE) :**
+    1. COHÉRENTE avec le sujet {sujet_en_cours if sujet_en_cours else "actuel"}
+    2. SPÉCIFIQUE et technique
+    3. UTILE pour la recherche académique
+    4. STRUCTURÉE avec des conseils concrets
+    5. EN LIEN DIRECT avec la conversation précédente
+    
+    **🚫 CE QUE TU NE DOIS PAS FAIRE :**
+    - Ne parle PAS d'autres domaines que {sujet_en_cours if sujet_en_cours else "le sujet en cours"}
+    - Ne propose PAS de sujets sans rapport
+    - Ne fais PAS de généralités vagues
+    - Ne commence PAS par "Bonjour" automatiquement
+    
+    Reponds toujours en Francais
+    **✍️ TA RÉPONSE (commence directement par le contenu utile) :**
+    """
+    
+    try:
+        response = llm.invoke(prompt)
+        answer = response.content if hasattr(response, 'content') else str(response)
+        
+        # Vérification ULTRA STRICTE de la cohérence
+        if sujet_en_cours:
+            answer_lower = answer.lower()
+            sujet_lower = sujet_en_cours.lower()
+            
+            # Vérifier si la réponse parle du bon sujet
+            sujet_correct = any(
+                mot in answer_lower 
+                for mot in sujets_mots_cles.get(sujet_en_cours, [sujet_lower])
+            ) if sujet_en_cours in sujets_mots_cles else sujet_lower in answer_lower
+            
+            # Si la réponse n'est pas cohérente, FORCER la correction
+            if not sujet_correct:
+                correction_prompt = f"""
+                ATTENTION : TU AS FAIT UNE ERREUR DE COHÉRENCE !
+                
+                L'étudiant dit : "{question}"
+                
+                Mais VOUS PARLIEZ DE : {sujet_en_cours.upper()}
+                
+                Ta réponse n'était pas cohérente. Réponds ENCORE, mais cette fois :
+                
+                1. Commence par : "Pour rester sur notre sujet du {sujet_en_cours}..."
+                2. Fais le lien avec notre discussion précédente
+                3. Propose des pistes SPÉCIFIQUES à {sujet_en_cours}
+                4. Ne parle d'absolument rien d'autre
+                
+                Réponse corrigée (cohérente et précise) :
+                """
+                
+                corrected = llm.invoke(correction_prompt)
+                answer = corrected.content if hasattr(corrected, 'content') else str(corrected)
+        
+        # Nettoyer la réponse
+        answer = answer.strip()
+        
+        # Supprimer les salutations automatiques
+        unwanted_prefixes = [
+            "Bonjour ! ", "Bonjour, ", "Salut ! ", "Salut, ", 
+            "Hello ! ", "Hello, ", "Je suis MemoBot", "En tant que MemoBot"
+        ]
+        for prefix in unwanted_prefixes:
+            if answer.startswith(prefix):
+                answer = answer[len(prefix):].strip()
+        
+        return answer if answer else "Je comprends ta question. Pourrais-tu préciser comment cela s'inscrit dans notre discussion sur le sujet actuel ?"
+        
+    except Exception as e:
+        print(f"⚠️ Erreur dans répondre_question_cohérente: {e}")
+        
+        if sujet_en_cours:
+            return f"Pour rester sur notre sujet du {sujet_en_cours}, {question[:50]}... Quel aspect précis souhaitez-vous explorer dans ce domaine ?"
+        
+        return f"Je vois que vous parlez de '{question[:50]}...'. Pourrais-tu préciser le contexte académique de votre question ?"
 # ======================
 # GÉNÉRATION DE SUJETS
 # ======================

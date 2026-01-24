@@ -42,53 +42,193 @@ export default function MemoBotAssistant() {
 
 
     // Initialiser la conversation avec les infos utilisateur
-    const initializeConversation = async () => {
+const initializeConversation = async () => {
+    try {
+        console.log("🔍 Récupération des données utilisateur...");
+
+        if (!user || !user.id) {
+            console.log("⚠️ Utilisateur non connecté");
+            return;
+        }
+
+        // 1. Récupérer le PROFIL utilisateur
+        let profile;
         try {
-            // Récupérer les préférences de l'utilisateur
-            const preferences = await api.getPreferences()
-
-            const initialMessage: Message = {
-                id: 1,
-                text: getInitialGreeting(user, preferences),
-                sender: 'bot',
-                timestamp: getCurrentTime()
-            }
-
-            setMessages([initialMessage])
+            profile = await api.getUserProfile(user.id);
+            console.log("✅ Profil récupéré:", profile);
         } catch (error) {
-            // Message par défaut en cas d'erreur
-            const fallbackMessage: Message = {
-                id: 1,
-                text: `Bonjour ${user?.full_name ? user.full_name.split(' ')[0] : ''} !\n\nJe suis MemoBot, votre assistant pour trouver le sujet de mémoire idéal.\n\nParlez-moi de votre projet académique.`,
+            console.log("⚠️ Impossible de récupérer le profil:", error);
+        }
+
+        // 2. Récupérer les COMPÉTENCES utilisateur
+        let skills: any[] = [];
+        try {
+            skills = await api.getUserSkills(user.id);
+            console.log("✅ Compétences récupérées:", skills);
+        } catch (error) {
+            console.log("⚠️ Impossible de récupérer les compétences:", error);
+        }
+
+        // 3. Construire les intérêts à partir du profil ET des compétences
+        let interests = [];
+
+        // Ajouter les intérêts du profil
+        if (profile?.interests) {
+            interests.push(...profile.interests.split(',').map(i => i.trim()));
+        }
+
+        // Ajouter les compétences comme intérêts
+        if (skills.length > 0) {
+            skills.forEach(skill => {
+                interests.push(skill.name);
+                if (skill.category) {
+                    interests.push(skill.category);
+                }
+            });
+        }
+
+        // Filtrer les doublons
+        const uniqueInterests = [...new Set(interests.filter(i => i && i.length > 2))];
+        console.log("🎯 Intérêts calculés:", uniqueInterests);
+
+        // Créer le message d'introduction avec VRAIES données
+        const initialMessage: Message = {
+            id: 1,
+            text: getInitialGreeting(user, profile, skills, uniqueInterests),
+            sender: 'bot',
+            timestamp: getCurrentTime()
+        };
+
+        setMessages([initialMessage]);
+
+    } catch (error) {
+        console.error("❌ Erreur initialisation conversation:", error);
+        const fallbackMessage: Message = {
+            id: 1,
+            text: `Bonjour ! 👋\n\nJe suis MemoBot, votre assistant pour trouver le sujet de mémoire idéal.\n\nParlez-moi de votre projet.`,
+            sender: 'bot',
+            timestamp: getCurrentTime()
+        };
+        setMessages([fallbackMessage]);
+    }
+};
+
+// Fonction pour formater les listes de manière naturelle
+const formatList = (items: string[]): string => {
+    if (items.length === 0) return '';
+    if (items.length === 1) return items[0];
+    if (items.length === 2) return `${items[0]} et ${items[1]}`;
+    return items.slice(0, -1).join(', ') + ' et ' + items[items.length - 1];
+};
+
+// Version courte et précise du message de bienvenue
+const getInitialGreeting = (
+    user: any,
+    profile: any,
+    skills: any[],
+    interests: string[]
+) => {
+    const name = user?.full_name ? user.full_name.split(' ')[0] : 'Cher utilisateur';
+    
+    // Choisir une salutation aléatoire
+    const greetings = [
+        `Bonjour ${name} ! 👋`,
+        `Salut ${name} ! 😊`,
+        `Coucou ${name} ! 🚀`
+    ];
+    const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+    
+    // Récupérer les informations principales
+    const level = profile?.level ? `en ${profile.level}` : '';
+    const field = profile?.field || profile?.faculty || '';
+    const mainInterests = interests.slice(0, 3);
+    const topSkill = skills.length > 0 
+        ? skills.sort((a, b) => b.level - a.level)[0].name 
+        : null;
+    
+    // Construire le message étape par étape
+    let message = `${randomGreeting}\n\n`;
+    
+    // Profil académique
+    if (level || field) {
+        message += `Je vois votre profil ${level} ${field ? `en ${field}` : ''}.\n\n`;
+    }
+    
+    // Intérêts
+    if (mainInterests.length > 0) {
+        message += `Passionné par ${formatList(mainInterests)}`;
+        if (topSkill) {
+            message += ` et compétent en ${topSkill}`;
+        }
+        message += ` !\n\n`;
+    }
+    
+    // Proposition d'aide
+    message += `Je suis là pour vous aider à trouver **le sujet de mémoire parfait**.\n\n`;
+    message += `Parlez-moi de votre projet :\n`;
+    message += `• Qu'est-ce qui vous inspire ?\n`;
+    message += `• Des idées en tête ?\n`;
+    message += `• Des technologies qui vous intéressent ?`;
+    
+    return message;
+};
+    // Ajoutez cette fonction pour gérer la génération depuis la conversation
+    const handleGenerateFromConversation = async () => {
+        if (!user) {
+            alert('Veuillez vous connecter pour générer des sujets')
+            return
+        }
+
+        setIsGenerating(true)
+        setShowGenerateModal(false)
+
+        // Message d'attente
+        const waitingMessage: Message = {
+            id: Date.now(),
+            text: "🔄 J'analyse toute notre conversation pour générer des sujets parfaitement adaptés...\n\nCela prendra quelques secondes.",
+            sender: 'bot',
+            timestamp: getCurrentTime()
+        }
+        setMessages(prev => [...prev, waitingMessage])
+
+        try {
+            const response = await api.generateFromConversation()
+
+            if (response?.subjects && response.subjects.length > 0) {
+                // Message de succès
+                const successMessage: Message = {
+                    id: Date.now() + 1,
+                    text: `✅ J'ai généré ${response.subjects.length} sujets basés sur l'ensemble de notre discussion !\n\nRedirection vers la page des recommandations...`,
+                    sender: 'bot',
+                    timestamp: getCurrentTime()
+                }
+                setMessages(prev => [...prev, successMessage])
+
+                // Stocker les sujets générés dans localStorage pour la page suivante
+                localStorage.setItem('generated_subjects', JSON.stringify(response.subjects))
+                localStorage.setItem('generation_session_id', response.session_id)
+
+                // Rediriger après 2 secondes
+                setTimeout(() => {
+                    window.location.href = '/dashboard/recommendations/chat?source=chat&session=' + response.session_id
+                }, 2000)
+            }
+
+        } catch (error) {
+            console.error('Erreur génération:', error)
+
+            const errorMessage: Message = {
+                id: Date.now() + 1,
+                text: "Désolé, je n'ai pas pu générer de sujets. Soit je n'ai pas assez d'informations, soit il y a un problème technique. Continuons notre discussion !",
                 sender: 'bot',
                 timestamp: getCurrentTime()
             }
-
-            setMessages([fallbackMessage])
+            setMessages(prev => [...prev, errorMessage])
+        } finally {
+            setIsGenerating(false)
         }
     }
 
-    // Générer le message initial personnalisé
-    const getInitialGreeting = (user: any, preferences: any) => {
-        const name = user?.full_name ? user.full_name.split(' ')[0] : ''
-        let greeting = `Bonjour ${name} ! 👋\n\n`
-
-        if (preferences?.level) {
-            greeting += `Je vois que vous êtes en ${preferences.level}. `
-        }
-
-        if (preferences?.faculty) {
-            greeting += `À la faculté de ${preferences.faculty}, `
-        }
-
-        if (preferences?.interests) {
-            greeting += `vos intérêts sont : ${preferences.interests}. `
-        }
-
-        greeting += `\n\nParlez-moi de votre projet de mémoire. Que cherchez-vous ?\n• Votre domaine de prédilection\n• Vos contraintes temporelles\n• Les technologies qui vous intéressent\n• Toute autre information utile`
-
-        return greeting
-    }
 
     // Scroll vers le dernier message
     useEffect(() => {
@@ -588,6 +728,7 @@ export default function MemoBotAssistant() {
             </AnimatePresence>
             {/* Modal simple de génération */}
             <AnimatePresence>
+                // Modifiez le bouton dans le modal de génération
                 {showGenerateModal && (
                     <motion.div
                         initial={{ opacity: 0 }}
@@ -603,26 +744,21 @@ export default function MemoBotAssistant() {
                             className="relative w-full max-w-md bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            {/* En-tête colorée */}
                             <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-white">
                                 <div className="flex items-center justify-center mb-4">
                                     <Sparkles className="w-10 h-10" />
                                 </div>
                                 <h3 className="text-xl font-bold text-center mb-2">
-                                    {isGenerating ? 'Génération en cours...' : 'Sujets personnalisés prêts !'}
+                                    {isGenerating ? 'Génération en cours...' : 'Prêt à générer !'}
                                 </h3>
                                 <p className="text-blue-100 text-center text-sm">
-                                    {isGenerating
-                                        ? "Analyse de votre conversation et création de sujets adaptés"
-                                        : "Basé sur notre discussion, je peux créer des sujets spécialement pour vous"
-                                    }
+                                    Basé sur vos {messages.filter(m => m.sender === 'user').length} messages
                                 </p>
                             </div>
 
                             <div className="p-6">
                                 {isGenerating ? (
                                     <div className="space-y-4">
-                                        {/* Animation de chargement améliorée */}
                                         <div className="flex flex-col items-center justify-center space-y-4">
                                             <div className="relative">
                                                 <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -630,17 +766,8 @@ export default function MemoBotAssistant() {
                                             </div>
                                             <div className="text-center">
                                                 <p className="font-medium text-gray-800 dark:text-gray-200">
-                                                    Création de vos sujets...
+                                                    Analyse de votre conversation...
                                                 </p>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                                                    J'analyse :<br />
-                                                    • Vos intérêts et contraintes<br />
-                                                    • Les technologies mentionnées<br />
-                                                    • Le niveau académique requis
-                                                </p>
-                                            </div>
-                                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                                <div className="bg-blue-600 h-2 rounded-full animate-pulse w-3/4"></div>
                                             </div>
                                         </div>
                                     </div>
@@ -653,30 +780,23 @@ export default function MemoBotAssistant() {
                                                 </div>
                                                 <div>
                                                     <h4 className="font-semibold text-gray-800 dark:text-gray-200">
-                                                        Ce que j'ai compris :
+                                                        Résumé de notre discussion :
                                                     </h4>
-                                                    <ul className="text-sm text-gray-600 dark:text-gray-400 mt-2 space-y-1">
-                                                        {messages
-                                                            .filter(m => m.sender === 'user')
-                                                            .slice(-3)
-                                                            .map((msg, idx) => (
-                                                                <li key={idx} className="flex items-start">
-                                                                    <span className="text-blue-500 mr-2">•</span>
-                                                                    <span className="truncate">{msg.text.substring(0, 60)}...</span>
-                                                                </li>
-                                                            ))}
-                                                    </ul>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                                                        Vous avez échangé {messages.filter(m => m.sender === 'user').length} fois sur votre projet.
+                                                        Je vais analyser tous ces échanges pour créer des sujets personnalisés.
+                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
 
                                         <div className="flex flex-col space-y-3">
                                             <button
-                                                onClick={handleGenerateSubjects}
+                                                onClick={handleGenerateFromConversation} // Utiliser la nouvelle fonction
                                                 className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-3"
                                             >
                                                 <Sparkles className="w-5 h-5" />
-                                                <span>Générer 3 sujets personnalisés</span>
+                                                <span>Générer 3 sujets depuis la conversation</span>
                                             </button>
 
                                             <button
@@ -685,10 +805,6 @@ export default function MemoBotAssistant() {
                                             >
                                                 Continuer la discussion
                                             </button>
-
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 text-center pt-2">
-                                                Les sujets générés seront sauvegardés dans votre espace personnel
-                                            </p>
                                         </div>
                                     </div>
                                 )}

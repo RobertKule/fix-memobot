@@ -171,14 +171,13 @@ class UserHistory(Base):
 
 class ConversationMessage(Base):
     __tablename__ = "conversation_messages"
-
+    
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    role = Column(String(20), nullable=False)  # 'user' ou 'assistant'
-    content = Column(Text, nullable=False)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relation
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    role = Column(String)  # "user" ou "assistant"
+    content = Column(Text)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    
     user = relationship("User", back_populates="conversations")
 
 

@@ -705,7 +705,21 @@ async getAdminStats(): Promise<{
   return this.request('/admin/stats', {}, { disableCache: true })
 }
 
-
+async generateFromConversation(): Promise<{
+  session_id: string;
+  subjects: any[];
+  count: number;
+  message: string;
+}> {
+  return this.request<{
+    session_id: string;
+    subjects: any[];
+    count: number;
+    message: string;
+  }>('/ai/generate-from-conversation', {
+    method: 'POST',
+  }, { disableCache: true })
+}
   // ========== IA AVANCÉE ==========
   async askAI(question: string, context?: string) {
     return this.request<AIResponse>('/ai/ask', {
@@ -998,26 +1012,23 @@ async getAdminStats(): Promise<{
   }
 
   async getPreferences(): Promise<any> {
+  try {
+    return await this.request('/settings/preferences', {}, { cacheTTL: LONG_TTL })
+  } catch {
+    // Si l'endpoint n'existe pas, essayez un autre
     try {
-      return await this.request('/settings/preferences', {}, { cacheTTL: LONG_TTL })
+      return await this.request('/users/me/preferences', {}, { cacheTTL: LONG_TTL })
     } catch {
       return {
         theme: 'system',
         language: 'fr',
-        notifications: {
-          email: true,
-          push: true,
-          newsletter: false,
-          recommendations: true,
-        },
-        privacy: {
-          profileVisibility: 'private',
-          showEmail: false,
-          showActivity: true,
-        },
+        level: '',
+        faculty: '',
+        interests: ''
       }
     }
   }
+}
 
   async updatePreferences(preferences: any): Promise<any> {
     return this.request('/settings/preferences', {

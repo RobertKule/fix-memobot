@@ -119,6 +119,33 @@ export interface AcceptanceCriteria {
   conseils_pratiques: string[]
 }
 
+export interface AdminStats {
+  total_users: number
+  active_users: number
+  total_sujets: number
+  active_sujets: number
+  ai_analyses: number
+  domain_stats: Array<{ domaine: string; count: number; avg_views: number }>
+  role_stats: Array<{ role: string; count: number }>
+  recent_stats: {
+    new_users_7d: number
+    new_sujets_7d: number
+  }
+  recent_activities: Array<{
+    type: string
+    action: string
+    user: string
+    timestamp: string
+  }>
+  timestamp: string
+}
+
+export interface AdminUsersResponse {
+  users: User[]
+  total: number
+  skip: number
+  limit: number
+}
 export interface UserPreference {
   id: number
   user_id: number
@@ -604,6 +631,80 @@ class ApiService {
       body: JSON.stringify(normalizedData),
     }, { disableCache: true })
   }
+async resetConversation(): Promise<{ success: boolean; message: string }> {
+  return this.request<{ success: boolean; message: string }>('/ai/reset-conversation', {
+    method: 'POST',
+  }, { disableCache: true })
+}
+
+// ========== ADMIN ENDPOINTS ==========
+
+async getAdminUsers(params?: {
+  skip?: number
+  limit?: number
+  search?: string
+  role?: string
+  is_active?: boolean
+}): Promise<{
+  users: User[]
+  total: number
+  skip: number
+  limit: number
+}> {
+  const query = new URLSearchParams()
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        query.append(key, String(value))
+      }
+    })
+  }
+  
+  const endpoint = query.toString() ? `/admin/users?${query}` : '/admin/users'
+  return this.request(endpoint, {}, { disableCache: true })
+}
+
+async activateUser(userId: number): Promise<{ message: string; user: User }> {
+  return this.request(`/admin/users/${userId}/activate`, {
+    method: 'POST',
+  }, { disableCache: true })
+}
+
+async deactivateUser(userId: number): Promise<{ message: string; user: User }> {
+  return this.request(`/admin/users/${userId}/deactivate`, {
+    method: 'POST',
+  }, { disableCache: true })
+}
+
+async deleteUser(userId: number): Promise<{ message: string }> {
+  return this.request(`/admin/users/${userId}`, {
+    method: 'DELETE',
+  }, { disableCache: true })
+}
+
+async getAdminStats(): Promise<{
+  total_users: number
+  active_users: number
+  total_sujets: number
+  active_sujets: number
+  ai_analyses: number
+  domain_stats: Array<{ domaine: string; count: number; avg_views: number }>
+  role_stats: Array<{ role: string; count: number }>
+  recent_stats: {
+    new_users_7d: number
+    new_sujets_7d: number
+  }
+  recent_activities: Array<{
+    type: string
+    action: string
+    user: string
+    timestamp: string
+  }>
+  timestamp: string
+}> {
+  return this.request('/admin/stats', {}, { disableCache: true })
+}
+
 
   // ========== IA AVANCÉE ==========
   async askAI(question: string, context?: string) {
@@ -755,6 +856,12 @@ class ApiService {
     }, { disableCache: true })
   }
 
+  async AskWithAI(data: { message: string; context?: string }): Promise<AIResponse> {
+    return this.request<AIResponse>('/ai/ask', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { disableCache: true })
+  }
   // ========== USERS ==========
   async getUserProfile(userId: number): Promise<UserProfile> {
     try {

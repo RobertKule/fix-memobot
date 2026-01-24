@@ -1,11 +1,12 @@
 # app/routes/ai.py 
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.dependencies import get_current_user, get_db
 from app import schemas, crud
 from app.recommendation import recommendation_engine
+from app.llm_service import répondre_question_cohérente
 
 router = APIRouter(tags=["ai"])
 
@@ -302,85 +303,43 @@ async def save_chosen_subject(
             detail=f"Erreur lors de la sauvegarde: {str(e)}"
         )
 
-# Route améliorée pour le chat
 @router.post("/chat", response_model=schemas.AIChatResponse)
 async def chat_with_ai(
     request: schemas.AIChatRequest,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Chat intelligent avec contexte et suggestions"""
+    """Chat intelligent avec FORCE de cohérence"""
     try:
-        # Récupérer l'historique de conversation
-        conversation_history = crud.get_conversation_history(db, current_user.id, limit=10)
+        # Récupérer l'historique complet
+        conversation_history = crud.get_conversation_history(db, current_user.id, limit=20)
         
-        # Construire le contexte
-        preference = crud.get_or_create_preference(db, current_user.id)
-        user_context = f"Utilisateur: {current_user.email}\n"
-        
-        if preference:
-            if preference.interests:
-                user_context += f"Intérêts: {preference.interests}\n"
-            if preference.level:
-                user_context += f"Niveau: {preference.level}\n"
-            if preference.faculty:
-                user_context += f"Faculté: {preference.faculty}\n"
-        
-        # Ajouter l'historique de conversation
-        history_text = "\n".join([
-            f"{'Utilisateur' if h.role == 'user' else 'Assistant'}: {h.content}"
-            for h in conversation_history
+        # Construire le contexte de manière SIMPLE mais COMPLÈTE
+        history_context = "\n".join([
+            f"{'ÉTUDIANT' if h.role == 'user' else 'MEMOBOT'}: {h.content}"
+            for h in conversation_history[-10:]  # 10 derniers messages
         ])
         
-        # Construire le prompt contextuel
+        # Ajouter les infos utilisateur
+        preference = crud.get_or_create_preference(db, current_user.id)
+        user_context = ""
+        if preference:
+            user_context += f"Étudiant en {preference.level} " if preference.level else ""
+            user_context += f"à la faculté de {preference.faculty} " if preference.faculty else ""
+            user_context += f"intéressé par: {preference.interests} " if preference.interests else ""
+        
+        # Construire le contexte final
         full_context = f"""
-        {user_context}
+        CONTEXTE UTILISATEUR: {user_context}
         
-        Historique de conversation:
-        {history_text}
+        HISTORIQUE COMPLET (du plus ancien au plus récent):
+        {history_context if history_context else "Première conversation"}
         
-        Nouvelle question de l'utilisateur: {request.message}
-        
-        En tant qu'assistant MemoBot, sois:
-        1. **Concis mais précis** - Donne des réponses claires et structurées
-        2. **Proactif** - Propose des suggestions pertinentes
-        3. **Encourageant** - Soutiens l'utilisateur dans sa démarche
-        4. **Pratique** - Donne des conseils applicables immédiatement
-        
-        Si la question concerne:
-        - Un sujet de mémoire → Propose 3 pistes concrètes
-        - Une méthodologie → Explique clairement avec exemples
-        - Un problème spécifique → Donne des solutions étape par étape
+        NOTE CRITIQUE: Tu DOIS rester sur le même sujet que l'historique ci-dessus.
         """
         
-        # Obtenir la message de l'IA
-        message = répondre_question(request.message, full_context)
-        
-        # Analyser la message pour extraire des suggestions
-        suggestions = []
-        action_buttons = []
-        
-        # Détecter le type de demande
-        message_lower = request.message.lower()
-        
-        if any(word in message_lower for word in ['sujet', 'thème', 'idée', 'projet']):
-            suggestions = [
-                "Voulez-vous que je génère 3 sujets spécifiques pour vous ?",
-                "Je peux vous aider à affiner votre problématique",
-                "Consultez la base de sujets existants pour inspiration"
-            ]
-            action_buttons = [
-                {"text": "🎯 Générer 3 sujets IA", "action": "generate_three"},
-                {"text": "📚 Voir les sujets populaires", "action": "browse_popular"},
-                {"text": "🔍 Affiner ma problématique", "action": "refine_problem"}
-            ]
-        
-        elif any(word in message_lower for word in ['méthodo', 'méthodologie', 'approche']):
-            suggestions = [
-                "Choisissez une méthodologie adaptée à votre question de recherche",
-                "Méthodes quantitatives: enquêtes, expérimentations",
-                "Méthodes qualitatives: entretiens, études de cas"
-            ]
+        # Obtenir la réponse COHÉRENTE
+        message = répondre_question_cohérente(request.message, full_context)
         
         # Sauvegarder la conversation
         crud.save_conversation_message(
@@ -397,86 +356,86 @@ async def chat_with_ai(
             content=message
         )
         
+        # Suggestions basées sur le contenu
+        suggestions = []
+        message_lower = request.message.lower()
+        
+        if any(word in message_lower for word in ['classification', 'plante', 'médicinal']):
+            suggestions = [
+                "Je peux vous aider à définir la méthodologie de classification",
+                "Voulez-vous explorer les algorithmes de machine learning adaptés ?",
+                "Parlons des datasets disponibles pour les plantes médicinales"
+            ]
+        elif any(word in message_lower for word in ['sujet', 'mémoire', 'projet']):
+            suggestions = [
+                "Je peux générer 3 sujets spécifiques basés sur notre discussion",
+                "Voulez-vous que j'analyse la faisabilité de votre idée ?",
+                "Parlons de la structure de votre mémoire"
+            ]
+        
         return {
             "message": message,
             "suggestions": suggestions,
-            "actions": action_buttons,
+            "actions": [
+                {"text": "🎯 Générer 3 sujets", "action": "generate_three"},
+                {"text": "📊 Analyser la faisabilité", "action": "analyze_feasibility"}
+            ] if 'sujet' in message_lower or 'mémoire' in message_lower else [],
             "timestamp": datetime.utcnow().isoformat()
         }
         
     except Exception as e:
         print(f"Erreur dans chat_with_ai: {e}")
-        # message de secours
         return {
-            "message": "Je suis désolé, je rencontre des difficultés techniques. Pouvez-vous reformuler votre question ? En attendant, voici quelques conseils généraux:\n\n1. Précisez votre domaine d'étude\n2. Décrivez vos intérêts de recherche\n3. Mentionnez votre niveau académique\n\nCela m'aidera à mieux vous assister !",
-            "suggestions": ["Réessayez votre question", "Consultez les FAQs", "Contactez un enseignant"],
+            "message": "Je rencontre une difficulté technique. Pourriez-vous reformuler votre question en restant sur notre sujet de discussion ?",
+            "suggestions": ["Réessayez en étant plus spécifique", "Reprenez notre sujet précédent"],
             "actions": [],
             "timestamp": datetime.utcnow().isoformat()
         }
 
+# la route pour communiquer avec notre AI
 @router.post("/ask", response_model=schemas.AIResponse)
 async def ask_question(
     request: schemas.AIRequest,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Route legacy pour compatibilité avec l'ancien frontend"""
+    """Route legacy pour compatibilité avec l'ancien frontend - AVEC CONTEXTE COMPLET"""
     try:
-        # Récupérer l'historique de conversation
-        conversation_history = crud.get_conversation_history(db, current_user.id, limit=5)  # Limiter à 5
+        # 1. RÉCUPÉRER TOUT L'HISTORIQUE RÉCENT
+        conversation_history = crud.get_conversation_history(db, current_user.id, limit=10)
         
-        # Construire le contexte de manière plus propre
+        # 2. CONSTRUIRE UN CONTEXTE RICHE
+        history_context = "HISTORIQUE DE LA CONVERSATION (du plus ancien au plus récent):\n"
+        for msg in conversation_history[-5:]:  # 5 derniers messages seulement
+            role = "ÉTUDIANT" if msg.role == 'user' else "MEMOBOT"
+            history_context += f"{role}: {msg.content}\n"
+        
+        # 3. AJOUTER LES PRÉFÉRENCES
         preference = crud.get_or_create_preference(db, current_user.id)
+        user_info = ""
+        if preference:
+            if preference.interests:
+                user_info += f"Intérêts connus: {preference.interests}. "
+            if preference.level:
+                user_info += f"Niveau académique: {preference.level}. "
+            if preference.faculty:
+                user_info += f"Faculté: {preference.faculty}. "
         
-        # Construire un prompt plus simple et direct
-        context_parts = []
+        # 4. CONSTRUIRE LE CONTEXTE COMPLET
+        full_context = f"""
+        INFORMATIONS UTILISATEUR:
+        {user_info if user_info else "Pas d'informations supplémentaires."}
         
-        if preference and preference.interests:
-            context_parts.append(f"Intérêts de l'utilisateur: {preference.interests}")
+        {history_context if conversation_history else "Pas d'historique précédent."}
         
-        if preference and preference.level:
-            context_parts.append(f"Niveau académique: {preference.level}")
+        NOTE IMPORTANTE: Tu dois RESTER COHÉRENT avec l'historique ci-dessus.
+        Si l'étudiant change de sujet abruptement, rappelle-lui gentiment le sujet en cours.
+        """
         
-        if preference and preference.faculty:
-            context_parts.append(f"Faculté: {preference.faculty}")
+        # 5. Obtenir la réponse AVEC CONTEXTE COMPLET
+        message = répondre_question(request.question, full_context)
         
-        # Ajouter l'historique récent
-        if conversation_history:
-            recent_history = conversation_history[-3:]  # 3 derniers messages
-            history_text = "\n".join([
-                f"{'Étudiant' if h.role == 'user' else 'Assistant'}: {h.content[:100]}..." 
-                for h in recent_history
-            ])
-            context_parts.append(f"Historique récent:\n{history_text}")
-        
-        # Construire le contexte final
-        context = "\n".join(context_parts) if context_parts else ""
-        
-        # Obtenir la message de l'IA avec un prompt plus simple
-        message = répondre_question(request.question, context)
-        
-        # Nettoyer la message (enlever les répétitions de prompt)
-        if "**RÉPONSE:**" in message:
-            message = message.split("**RÉPONSE:**")[-1].strip()
-        
-        # Extraire des suggestions basées sur le type de question
-        suggestions = []
-        question_lower = request.question.lower()
-        
-        if any(word in question_lower for word in ['sujet', 'thème', 'idée', 'projet', 'mémoire']):
-            suggestions = [
-                "Voulez-vous que je génère 3 sujets IA spécifiques pour vous ?",
-                "Je peux vous aider à affiner votre problématique",
-                "Consultez notre base de sujets existants"
-            ]
-        elif any(word in question_lower for word in ['méthodo', 'méthodologie', 'approche', 'méthode']):
-            suggestions = [
-                "Méthodologie quantitative: enquêtes, expérimentations",
-                "Méthodologie qualitative: entretiens, études de cas",
-                "Méthodes mixtes: combinaison des deux approches"
-            ]
-        
-        # Sauvegarder la conversation
+        # 6. SAUVEGARDER LA CONVERSATION
         crud.save_conversation_message(
             db,
             user_id=current_user.id,
@@ -491,20 +450,26 @@ async def ask_question(
             content=message
         )
         
+        # 7. Suggestions intelligentes basées sur le contenu
+        suggestions = []
+        if any(word in request.question.lower() for word in ['génie', 'civil', 'bâtiment', 'construction']):
+            suggestions.append("Voir des exemples de sujets en génie civil")
+            suggestions.append("Explorer les méthodologies pour projets de construction")
+        
         return schemas.AIResponse(
             question=request.question,
             message=message,
-            suggestions=suggestions
+            suggestions=suggestions[:2]  # Max 2 suggestions
         )
         
     except Exception as e:
         print(f"Erreur dans ask_question: {e}")
         return schemas.AIResponse(
             question=request.question,
-            message="Je suis désolé, je rencontre des difficultés techniques. Pouvez-vous reformuler votre question ?",
-            suggestions=["Réessayez votre question", "Consultez les FAQs", "Contactez un enseignant"]
+            message=f"Je vois que tu parles de '{request.question[:40]}...'. Pour rester cohérent avec notre discussion, pourrais-tu préciser le lien avec notre sujet précédent ?",
+            suggestions=["Reprendre le sujet précédent", "Clarifier le lien entre les idées"]
         )
-
+        
 @router.post("/recommend", response_model=List[schemas.RecommendedSujet])
 async def recommend_with_ai(
     request: schemas.RecommendationRequest,
@@ -545,6 +510,7 @@ async def recommend_with_ai(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la recommandation: {str(e)}"
         )
+        
 @router.post("/analyze", response_model=schemas.AIAnalysisResponse)
 async def analyze_subject(
     request: schemas.AnalyzeSubjectRequest,
@@ -581,7 +547,7 @@ async def analyze_subject(
         )
         crud.create_user_history(db, history_data)
         
-        # Formater la message selon le schéma
+        # Formater la réponse selon le schéma
         return {
             "pertinence": analysis.get("pertinence", 75),
             "points_forts": analysis.get("points_forts", []),
@@ -615,6 +581,7 @@ async def analyze_subject(
                 "Planifier les ressources nécessaires"
             ]
         }
+
 # Route publique pour le chat sans authentification
 @router.post("/ask-public", response_model=schemas.AIResponse)
 async def ask_question_public(
@@ -626,10 +593,10 @@ async def ask_question_public(
         # Construire un prompt simple
         context = "Utilisateur non connecté posant une question sur un sujet de mémoire."
         
-        # Obtenir la message de l'IA
+        # Obtenir la réponse de l'IA
         message = répondre_question(request.question, context)
         
-        # Nettoyer la message
+        # Nettoyer la réponse
         if "**RÉPONSE:**" in message:
             message = message.split("**RÉPONSE:**")[-1].strip()
         
@@ -715,3 +682,33 @@ async def analyze_subject_public(
                 "Valider la faisabilité technique"
             ]
         }
+@router.post("/reset-conversation", response_model=schemas.AIResponse)
+async def reset_conversation(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Réinitialise complètement la conversation pour un utilisateur"""
+    try:
+        # Supprimer l'historique de conversation
+        crud.clear_conversation_history(db, current_user.id)
+        
+        # Ajouter un log d'historique
+        history_data = schemas.UserHistoryCreate(
+            user_id=current_user.id,
+            action="reset_conversation",
+            details="A réinitialisé la conversation avec MemoBot",
+            metadata={"timestamp": datetime.utcnow().isoformat()}
+        )
+        crud.create_user_history(db, history_data)
+        
+        return {
+            "success": True,
+            "message": "Conversation réinitialisée avec succès. Vous pouvez commencer une nouvelle discussion."
+        }
+        
+    except Exception as e:
+        print(f"Erreur dans reset_conversation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la réinitialisation: {str(e)}"
+        )

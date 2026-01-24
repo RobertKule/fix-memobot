@@ -6,6 +6,7 @@ from datetime import datetime
 from app.dependencies import get_current_user, get_db
 from app import schemas, crud
 from app.recommendation import recommendation_engine
+from app.llm_service import répondre_question_cohérente
 
 router = APIRouter(tags=["ai"])
 
@@ -302,60 +303,43 @@ async def save_chosen_subject(
             detail=f"Erreur lors de la sauvegarde: {str(e)}"
         )
 
-# Route CORRIGÉE pour le chat - AVEC CONTEXTE COMPLET comme /ask
 @router.post("/chat", response_model=schemas.AIChatResponse)
 async def chat_with_ai(
     request: schemas.AIChatRequest,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Chat intelligent avec contexte COMPLET comme /ask"""
+    """Chat intelligent avec FORCE de cohérence"""
     try:
-        # RÉCUPÉRER TOUT L'HISTORIQUE RÉCENT - MÊME LOGIQUE QUE /ask
-        conversation_history = crud.get_conversation_history(db, current_user.id, limit=10)
+        # Récupérer l'historique complet
+        conversation_history = crud.get_conversation_history(db, current_user.id, limit=20)
         
-        # CONSTRUIRE LE CONTEXTE COMPLET
-        history_text = "\n".join([
+        # Construire le contexte de manière SIMPLE mais COMPLÈTE
+        history_context = "\n".join([
             f"{'ÉTUDIANT' if h.role == 'user' else 'MEMOBOT'}: {h.content}"
-            for h in conversation_history[-5:]  # 5 derniers messages
+            for h in conversation_history[-10:]  # 10 derniers messages
         ])
         
-        # AJOUTER LES PRÉFÉRENCES
+        # Ajouter les infos utilisateur
         preference = crud.get_or_create_preference(db, current_user.id)
-        user_info = ""
+        user_context = ""
         if preference:
-            if preference.interests:
-                user_info += f"Intérêts: {preference.interests}. "
-            if preference.level:
-                user_info += f"Niveau: {preference.level}. "
-            if preference.faculty:
-                user_info += f"Faculté: {preference.faculty}. "
+            user_context += f"Étudiant en {preference.level} " if preference.level else ""
+            user_context += f"à la faculté de {preference.faculty} " if preference.faculty else ""
+            user_context += f"intéressé par: {preference.interests} " if preference.interests else ""
         
-        # CONSTRUIRE LE CONTEXTE FINAL
+        # Construire le contexte final
         full_context = f"""
-        INFORMATIONS UTILISATEUR:
-        {user_info if user_info else "Nouvel utilisateur"}
+        CONTEXTE UTILISATEUR: {user_context}
         
-        HISTORIQUE RÉCENT:
-        {history_text if history_text else "Pas d'historique"}
+        HISTORIQUE COMPLET (du plus ancien au plus récent):
+        {history_context if history_context else "Première conversation"}
         
-        NOTE IMPORTANTE: Reste COHÉRENT avec l'historique. 
-        Si le sujet change abruptement, demande une clarification ou fais le lien avec le sujet précédent.
+        NOTE CRITIQUE: Tu DOIS rester sur le même sujet que l'historique ci-dessus.
         """
         
-        # Obtenir la réponse
-        message = répondre_question(request.message, full_context)
-        
-        # Analyser pour extraire des suggestions
-        suggestions = []
-        message_lower = request.message.lower()
-        
-        if any(word in message_lower for word in ['sujet', 'thème', 'idée', 'projet', 'mémoire']):
-            suggestions = [
-                "Je peux générer 3 sujets spécifiques pour vous",
-                "Consultez notre base de sujets existants",
-                "Affinez votre problématique avec moi"
-            ]
+        # Obtenir la réponse COHÉRENTE
+        message = répondre_question_cohérente(request.message, full_context)
         
         # Sauvegarder la conversation
         crud.save_conversation_message(
@@ -372,18 +356,38 @@ async def chat_with_ai(
             content=message
         )
         
+        # Suggestions basées sur le contenu
+        suggestions = []
+        message_lower = request.message.lower()
+        
+        if any(word in message_lower for word in ['classification', 'plante', 'médicinal']):
+            suggestions = [
+                "Je peux vous aider à définir la méthodologie de classification",
+                "Voulez-vous explorer les algorithmes de machine learning adaptés ?",
+                "Parlons des datasets disponibles pour les plantes médicinales"
+            ]
+        elif any(word in message_lower for word in ['sujet', 'mémoire', 'projet']):
+            suggestions = [
+                "Je peux générer 3 sujets spécifiques basés sur notre discussion",
+                "Voulez-vous que j'analyse la faisabilité de votre idée ?",
+                "Parlons de la structure de votre mémoire"
+            ]
+        
         return {
             "message": message,
             "suggestions": suggestions,
-            "actions": [],
+            "actions": [
+                {"text": "🎯 Générer 3 sujets", "action": "generate_three"},
+                {"text": "📊 Analyser la faisabilité", "action": "analyze_feasibility"}
+            ] if 'sujet' in message_lower or 'mémoire' in message_lower else [],
             "timestamp": datetime.utcnow().isoformat()
         }
         
     except Exception as e:
         print(f"Erreur dans chat_with_ai: {e}")
         return {
-            "message": "Je suis désolé, je rencontre des difficultés techniques. Pouvez-vous reformuler votre question ?",
-            "suggestions": ["Réessayez votre question", "Contactez le support"],
+            "message": "Je rencontre une difficulté technique. Pourriez-vous reformuler votre question en restant sur notre sujet de discussion ?",
+            "suggestions": ["Réessayez en étant plus spécifique", "Reprenez notre sujet précédent"],
             "actions": [],
             "timestamp": datetime.utcnow().isoformat()
         }
@@ -678,3 +682,33 @@ async def analyze_subject_public(
                 "Valider la faisabilité technique"
             ]
         }
+@router.post("/reset-conversation", response_model=schemas.AIResponse)
+async def reset_conversation(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Réinitialise complètement la conversation pour un utilisateur"""
+    try:
+        # Supprimer l'historique de conversation
+        crud.clear_conversation_history(db, current_user.id)
+        
+        # Ajouter un log d'historique
+        history_data = schemas.UserHistoryCreate(
+            user_id=current_user.id,
+            action="reset_conversation",
+            details="A réinitialisé la conversation avec MemoBot",
+            metadata={"timestamp": datetime.utcnow().isoformat()}
+        )
+        crud.create_user_history(db, history_data)
+        
+        return {
+            "success": True,
+            "message": "Conversation réinitialisée avec succès. Vous pouvez commencer une nouvelle discussion."
+        }
+        
+    except Exception as e:
+        print(f"Erreur dans reset_conversation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la réinitialisation: {str(e)}"
+        )

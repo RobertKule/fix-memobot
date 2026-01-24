@@ -103,21 +103,41 @@ export default function MemoBotAssistant() {
             }, 300)
         }
     }, [isOpen])
-    // Ajoutez cette fonction après handleGenerateSubjects
-    const handleResetConversation = () => {
-        setMessages([])
-        setShowResetConfirm(false)
-        setShowGenerateModal(false)
+    const handleResetConversation = async () => {
+        try {
+            // Appeler l'API pour réinitialiser côté serveur
+            await api.resetConversation()
 
-        // Réinitialiser avec un nouveau message
-        const resetMessage: Message = {
-            id: Date.now(),
-            text: "🧹 La conversation a été réinitialisée.\n\nParlons d'un nouveau sujet !\n\nDe quoi voulez-vous discuter maintenant ?",
-            sender: 'bot',
-            timestamp: getCurrentTime()
+            // Réinitialiser localement
+            setMessages([])
+            setShowResetConfirm(false)
+            setShowGenerateModal(false)
+
+            // Réinitialiser avec un nouveau message
+            const resetMessage: Message = {
+                id: Date.now(),
+                text: "🧹 La conversation a été réinitialisée.\n\nJe suis MemoBot, votre assistant pour trouver le sujet de mémoire idéal.\n\nParlons d'un nouveau sujet !\n\nDe quoi voulez-vous discuter ?\n• Votre domaine d'étude\n• Vos intérêts de recherche\n• Vos contraintes académiques",
+                sender: 'bot',
+                timestamp: getCurrentTime()
+            }
+
+            setMessages([resetMessage])
+
+        } catch (error) {
+            console.error('Erreur réinitialisation:', error)
+
+            // Fallback local
+            setMessages([])
+            setShowResetConfirm(false)
+
+            const errorMessage: Message = {
+                id: Date.now(),
+                text: "Conversation réinitialisée localement. Parlons d'un nouveau sujet !",
+                sender: 'bot',
+                timestamp: getCurrentTime()
+            }
+            setMessages([errorMessage])
         }
-
-        setMessages([resetMessage])
     }
     // Nouveau useEffect pour détecter quand afficher le modal
     useEffect(() => {
@@ -511,62 +531,61 @@ export default function MemoBotAssistant() {
                     </motion.div>
                 )}
             </AnimatePresence>
-// Ajoutez ce modal après le modal de génération (avant la dernière parenthèse fermante) :
 
-{/* Modal de confirmation pour réinitialiser */}
-<AnimatePresence>
-  {showResetConfirm && (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
-      onClick={() => setShowResetConfirm(false)}
-    >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0, y: 20 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-6">
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </div>
-          </div>
-          
-          <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-2">
-            Réinitialiser la conversation ?
-          </h3>
-          
-          <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
-            Tous les messages de cette conversation seront supprimés et vous commencerez une nouvelle discussion.
-          </p>
-          
-          <div className="flex flex-col space-y-3">
-            <button
-              onClick={handleResetConversation}
-              className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors"
-            >
-              Oui, réinitialiser
-            </button>
-            
-            <button
-              onClick={() => setShowResetConfirm(false)}
-              className="w-full px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium rounded-xl transition-colors"
-            >
-              Non, continuer
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  )}
-</AnimatePresence>
+            {/* Modal de confirmation pour réinitialiser */}
+            <AnimatePresence>
+                {showResetConfirm && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+                        onClick={() => setShowResetConfirm(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="p-6">
+                                <div className="flex items-center justify-center mb-4">
+                                    <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                                        <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-2">
+                                    Réinitialiser la conversation ?
+                                </h3>
+
+                                <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
+                                    Tous les messages de cette conversation seront supprimés et vous commencerez une nouvelle discussion.
+                                </p>
+
+                                <div className="flex flex-col space-y-3">
+                                    <button
+                                        onClick={handleResetConversation}
+                                        className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors"
+                                    >
+                                        Oui, réinitialiser
+                                    </button>
+
+                                    <button
+                                        onClick={() => setShowResetConfirm(false)}
+                                        className="w-full px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium rounded-xl transition-colors"
+                                    >
+                                        Non, continuer
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
             {/* Modal simple de génération */}
             <AnimatePresence>
                 {showGenerateModal && (

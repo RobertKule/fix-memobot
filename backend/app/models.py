@@ -72,7 +72,8 @@ class Sujet(Base):
     vue_count = Column(Integer, default=0)
     like_count = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
-
+    ai_analysis = Column(JSON, nullable=True)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)

@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 
-# Tous vos modèles dans un seul fichier __init__.py
+# Tout mes modèles dans un seul fichier __init__.py
 class User(Base):
     __tablename__ = "users"
     

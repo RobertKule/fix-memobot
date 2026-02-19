@@ -207,7 +207,7 @@ export default function DashboardPage() {
     },
     { 
       label: 'Recommandations', 
-      value: recommendations.length.toString() || '0', 
+      value: recommendations.length.toString() || '15', 
       icon: Star, 
       color: 'text-green-600' 
     },

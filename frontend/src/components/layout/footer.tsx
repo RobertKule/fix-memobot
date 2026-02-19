@@ -9,28 +9,28 @@ export default function Footer() {
 
   const footerLinks = {
     'Trouver son sujet': [
-      { label: 'Par domaine', href: '/domaines' },
-      { label: 'Par critères', href: '/criteres' },
-      { label: 'Par niveau', href: '/niveaux' },
-      { label: 'Sujets populaires', href: '/populaires' },
+      { label: 'Par domaine', href: '#' },
+      { label: 'Par critères', href: '#' },
+      { label: 'Par niveau', href: '#' },
+      { label: 'Sujets populaires', href: '#' },
     ],
     'Recommandations': [
-      { label: 'Personnalisées', href: '/recommandations' },
-      { label: 'Basées sur profil', href: '/profil' },
-      { label: 'Par intérêts', href: '/interets' },
-      { label: 'Par compétences', href: '/competences' },
+      { label: 'Personnalisées', href: '#' },
+      { label: 'Basées sur profil', href: '#' },
+      { label: 'Par intérêts', href: '#' },
+      { label: 'Par compétences', href: '#' },
     ],
     'Ressources': [
-      { label: 'Guides méthodologiques', href: '/guides' },
-      { label: 'Modèles de plan', href: '/modeles' },
-      { label: 'Bibliothèques', href: '/bibliotheques' },
-      { label: 'Outils de recherche', href: '/outils' },
+      { label: 'Guides méthodologiques', href: '#' },
+      { label: 'Modèles de plan', href: '#' },
+      { label: 'Bibliothèques', href: '#' },
+      { label: 'Outils de recherche', href: '#' },
     ],
     'Support': [
-      { label: 'FAQ académique', href: '/faq' },
-      { label: 'Contact tuteurs', href: '/tuteurs' },
-      { label: 'Centre d\'aide', href: '/aide' },
-      { label: 'Forum étudiant', href: '/forum' },
+      { label: 'FAQ académique', href:'#' },
+      { label: 'Contact tuteurs', href: '#' },
+      { label: 'Centre d\'aide', href: '#' },
+      { label: 'Forum étudiant', href: '#'},
     ],
   }
 
@@ -42,7 +42,7 @@ export default function Footer() {
   ]
 
   const contactInfo = [
-    { icon: Mail, text: 'support@memobot.com', href: 'mailto:support@memobot.com' },
+    { icon: Mail, text: 'happykitsa5@gmail.com', href: 'mailto:happykitsa5@gmail.com' },
     { icon: Phone, text: '+243 970 000 000', href: 'tel:+243970000000' },
     { icon: MapPin, text: 'ULPGL Goma, République Démocratique du Congo', href: 'https://maps.google.com' },
   ]
@@ -50,21 +50,7 @@ export default function Footer() {
   return (
     <footer className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
       <div className="container mx-auto px-6">
-        {/* Features */}
-        <div className="py-12 border-b border-gray-200 dark:border-gray-800">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {features.map((feature, index) => (
-              <div key={index} className="text-center">
-                <div className="inline-flex p-4 bg-[#1E40AF]/10 dark:bg-blue-500/10 rounded-2xl mb-4">
-                  <feature.icon className="w-8 h-8 text-[#1E40AF] dark:text-blue-400" />
-                </div>
-                <h4 className="font-bold text-gray-900 dark:text-white mb-2">{feature.title}</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{feature.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
+      
         {/* Main Footer */}
         <div className="py-12">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
@@ -135,35 +121,7 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Newsletter */}
-        <div className="py-10 border-y border-gray-200 dark:border-gray-800">
-          <div className="max-w-2xl">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                  Recevez des sujets recommandés
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Inscrivez-vous pour recevoir des recommandations personnalisées directement dans votre boîte mail.
-                </p>
-              </div>
-              <form className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                <input
-                  type="email"
-                  placeholder="Votre email académique"
-                  className="flex-1 px-5 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1E40AF]/20 dark:focus:ring-blue-500/30 focus:border-[#1E40AF] dark:focus:border-blue-500"
-                />
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-[#1E40AF] text-white font-medium text-sm rounded-xl hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors whitespace-nowrap"
-                >
-                  S'abonner
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-
+      
         {/* Bottom Bar */}
         <div className="py-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">

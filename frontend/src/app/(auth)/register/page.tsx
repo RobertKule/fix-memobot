@@ -178,7 +178,7 @@ export default function RegisterPage() {
             </div>
             <div className="text-left">
               <div className="text-2xl font-bold text-gray-900 dark:text-white">MemoBot</div>
-              <div className="text-sm text-blue-600 dark:text-blue-400">Commencez votre parcours</div>
+              <div className="text-sm text-blue-600 dark:text-blue-400">Retour à l'Accueil</div>
             </div>
           </Link>
           

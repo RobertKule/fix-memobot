@@ -4,14 +4,17 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 from sqlalchemy import func
-
+ 
 from app.database import get_db
 from app import crud, schemas
 from app.dependencies import get_current_user, require_admin
+
+
 from app.llm_service import (
-    recommander_sujets_llm as recommander_sujets,
+    recommander_sujets_llm,
     analyser_sujet,
-    générer_sujets_llm as générer_sujets
+    générer_sujets_llm,
+    get_acceptance_criteria
 )
 from app.models import Sujet, Feedback, UserHistory
 
@@ -235,14 +238,11 @@ async def get_recent_sujets(
 @router.post("/recommend", response_model=List[schemas.RecommendedSujet])
 async def recommend_sujets(
     request: schemas.RecommendationRequest,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """
-    Recommander des sujets basés sur les intérêts avec IA
-    """
+    """Recommandation de sujets basée sur les intérêts"""
     try:
-        # Log les données reçues
         print(f"📥 Recommandation request from user {current_user.email}")
         print(f"📥 Interests: {request.interests}")
         print(f"📥 Niveau: {request.niveau}")
@@ -251,115 +251,81 @@ async def recommend_sujets(
         print(f"📥 Difficulté: {request.difficulté}")
         print(f"📥 Limit: {request.limit}")
         
-        # Validation basique
-        if not request.interests or len(request.interests) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Le champ 'interests' est requis et ne peut pas être vide"
-            )
+        # Récupérer tous les sujets actifs
+        sujets = db.query(Sujet).filter(Sujet.is_active == True).all()
+        print(f"📚 {len(sujets)} sujets actifs trouvés")
         
-        # Vérifier que interests est une liste
-        if not isinstance(request.interests, list):
-            if isinstance(request.interests, str):
-                # Convertir string en liste
-                request.interests = [request.interests]
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Le champ 'interests' doit être une liste de chaînes de caractères"
-                )
-        
-        # Mettre à jour les préférences de l'utilisateur
-        crud.update_preference(db, current_user.id, {
-            "interests": ", ".join(request.interests),
-            "faculty": request.faculté,
-            "level": request.niveau
-        })
-        
-        # Récupérer les sujets correspondants
-        sujets_db = crud.search_sujets_by_keywords(
-            db, 
-            request.interests, 
-            limit=50
-        )
-        
-        if not sujets_db:
-            print("⚠️ Aucun sujet trouvé en base de données")
-            # Retourner une liste vide plutôt qu'une erreur
+        if not sujets:
             return []
         
-        # Préparer les données pour LLM
-        sujets_data = []
-        for sujet in sujets_db:
-            sujets_data.append({
+        # Convertir en dictionnaires
+        sujets_dict = []
+        for sujet in sujets:
+            sujets_dict.append({
                 "id": sujet.id,
                 "titre": sujet.titre,
-                "problematique": sujet.problématique,
+                "description": sujet.description,
                 "keywords": sujet.keywords,
                 "domaine": sujet.domaine,
                 "niveau": sujet.niveau,
                 "faculté": sujet.faculté,
                 "difficulté": sujet.difficulté,
-                "description": sujet.description
+                "problématique": sujet.problématique,
+                "vue_count": sujet.vue_count,
+                "like_count": sujet.like_count
             })
         
-        # Obtenir les recommandations LLM
+        # Utiliser le LLM pour les recommandations
+        critères = {
+            "niveau": request.niveau,
+            "faculté": request.faculté,
+            "domaine": request.domaine,
+            "difficulté": request.difficulté
+        }
+        
         try:
-            recommendations = recommander_sujets(
+            recommendations = recommander_sujets_llm(
                 interests=request.interests,
-                sujets=sujets_data,
-                critères={
-                    "niveau": request.niveau,
-                    "faculté": request.faculté,
-                    "domaine": request.domaine,
-                    "difficulté": request.difficulté
-                }
+                sujets=sujets_dict,
+                critères=critères
             )
-            
-            print(f"✅ Nombre de recommandations LLM: {len(recommendations)}")
-            
-        except Exception as llm_error:
-            print(f"⚠️ Erreur LLM, utilisation du fallback: {llm_error}")
-            # Fallback: recommandations simples basées sur les mots-clés
+            print(f"✅ {len(recommendations)} recommandations générées avec LLM")
+        except Exception as e:
+            print(f"⚠️ Erreur LLM, utilisation du fallback: {e}")
+            # Fallback: utiliser le moteur traditionnel
             recommendations = []
-            for i, sujet in enumerate(sujets_data[:request.limit]):
+            for sujet in sujets[:20]:
+                score = 50  # Score par défaut
+                raisons = ["Sujet pertinent"]
                 recommendations.append({
-                    "id": sujet["id"],
-                    "score": 70 + (i * 5),
-                    "raisons": [
-                        f"Correspond à vos intérêts: {', '.join(request.interests[:2])}",
-                        f"Domaine pertinent: {sujet['domaine']}",
-                        f"Niveau adapté: {request.niveau or 'tous niveaux'}"
-                    ],
-                    "critères": ["Matching mots-clés", "Domaine correspondant", "Niveau adapté"]
-                })
-        
-        # Mapper les recommandations avec les sujets complets
-        result = []
-        for rec in recommendations[:request.limit]:
-            sujet = next((s for s in sujets_db if s.id == rec.get("id", 0)), None)
-            if sujet:
-                result.append({
                     "sujet": sujet,
-                    "score": rec.get("score", 50),
-                    "raisons": rec.get("raisons", ["Sujet recommandé par notre système"]),
-                    "critères_respectés": rec.get("critères", ["Pertinence générale"])
+                    "score": score,
+                    "raisons": raisons,
+                    "critères_respectés": ["Pertinence"]
                 })
         
-        print(f"✅ Nombre de résultats finaux: {len(result)}")
-        return result
+        # Limiter le nombre de résultats
+        limit = min(request.limit or 10, 20)
+        recommendations = recommendations[:limit]
         
-    except HTTPException:
-        raise
+        # S'assurer que tous les scores sont entre 0 et 100
+        for rec in recommendations:
+            if rec["score"] > 100:
+                rec["score"] = 100
+            elif rec["score"] < 0:
+                rec["score"] = 0
+        
+        print(f"✅ Nombre de résultats finaux: {len(recommendations)}")
+        return recommendations
+        
     except Exception as e:
         print(f"❌ Erreur dans recommend_sujets: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur serveur: {str(e)}"
+            detail=f"Erreur lors de la recommandation: {str(e)}"
         )
-
 
 @router.post("/generate")
 async def generate_sujets(

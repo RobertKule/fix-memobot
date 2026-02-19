@@ -5,9 +5,8 @@ import json
 import re
 import csv
 from typing import List, Dict, Any, Optional
-
-from dotenv import load_dotenv
 from datetime import datetime
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -16,7 +15,7 @@ load_dotenv()
 # ======================
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemma-3-1b-it")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
 
 # Cache global des sujets du CSV
 SUJETS_CSV_CACHE: List[Dict[str, Any]] = []
@@ -29,6 +28,7 @@ SUJETS_CSV_INITIALIZED: bool = False
 llm = None
 json_parser = None
 
+
 try:
     from langchain_google_genai import (
         ChatGoogleGenerativeAI,
@@ -36,15 +36,14 @@ try:
     )
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
-    from langchain_core.exceptions import OutputParserException
-    from langchain_community.vectorstores import Chroma
+   
     from langchain_core.documents import Document
 
     if GOOGLE_API_KEY:
         llm = ChatGoogleGenerativeAI(
             model=GEMINI_MODEL,
             google_api_key=GOOGLE_API_KEY,
-            temperature=0.2,
+            temperature=0.7,
             max_output_tokens=2048,
         )
         json_parser = JsonOutputParser()
@@ -55,21 +54,28 @@ try:
         json_parser = None
 
 except ImportError as e:
-    print(f"❌ LangChain non disponible: {e}")
+    print(f"⚠️ LangChain non disponible: {e}")
     llm = None
     json_parser = None
     Chroma = None
     Document = None
     GoogleGenerativeAIEmbeddings = None
 
+
+try:
+    from langchain_chroma import Chroma
+    print("✅ Utilisation de langchain_chroma")
+except ImportError:
+    from langchain_community.vectorstores import Chroma
+    print("⚠️ Utilisation de langchain_community (déprécié)")
+
+
 # ======================
 # CHARGEMENT CSV SUJETS
 # ======================
 
 def load_sujets_csv(path: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Charge la base de sujets étudiants depuis le CSV pour servir de contexte à l'IA.
-    """
+    """Charge la base de sujets étudiants depuis le CSV"""
     global SUJETS_CSV_CACHE, SUJETS_CSV_INITIALIZED
 
     if SUJETS_CSV_CACHE:
@@ -111,80 +117,525 @@ def load_sujets_csv(path: Optional[str] = None) -> List[Dict[str, Any]]:
 
     return SUJETS_CSV_CACHE
 
-def get_llm_status() -> Dict[str, Any]:
+# ======================
+# ANALYSE DE CONVERSATION - STYLE EXPERT
+# ======================
+
+def analyser_conversation_expert(messages: List[Dict]) -> Dict[str, Any]:
+    """
+    Analyse la conversation comme le ferait un expert humain.
+    """
+    if not messages:
+        return {
+            "compris": False,
+            "contexte": "Début de conversation",
+            "elements_identifies": {},
+            "questions_a_poser": [
+                "Pour commencer, pourriez-vous me parler de votre parcours ?",
+                "Dans quel département êtes-vous ? (Génie informatique, civil, électrique, électronique ou mécanique ?)",
+                "Quel est votre niveau d'études actuel ?"
+            ],
+            "peut_proposer_sujets": False
+        }
+    
+    # Extraire tous les messages utilisateur
+    user_messages = [m for m in messages if m.get("role") == "user" or m.get("sender") == "user"]
+    user_text = " ".join([m.get("content", m.get("text", "")).lower() for m in user_messages])
+    
+    # Éléments à identifier naturellement
+    elements = {
+        "departement": None,
+        "niveau": None,
+        "technologies": [],
+        "centres_interet": [],
+        "type_projet": None,
+        "contraintes": []
+    }
+    
+    # Départements de la faculté
+    dept_keywords = {
+        "Génie Informatique": ["info", "informatique", "logiciel", "programmation", "code", "développement", "dev", "web", "mobile", "ia", "intelligence artificielle", "base de données", "réseau"],
+        "Génie Civil": ["civil", "construction", "bâtiment", "structure", "béton", "chantier", "génie civil", "pont", "route", "hydraulique"],
+        "Génie Électrique": ["électrique", "electrique", "circuit", "électricité", "electricite", "moteur électrique", "réseau électrique", "énergie"],
+        "Génie Électronique": ["électronique", "electronique", "carte", "microcontrôleur", "arduino", "raspberry", "fpga", "circuit imprimé"],
+        "Génie Mécanique": ["mécanique", "mecanique", "mécanismes", "moteur", "pièce", "conception mécanique", "fabrication", "usinage"]
+    }
+    
+    for dept, keywords in dept_keywords.items():
+        for kw in keywords:
+            if kw in user_text:
+                elements["departement"] = dept
+                break
+        if elements["departement"]:
+            break
+    
+    # Niveau d'études
+    niveau_keywords = {
+        "Licence": ["licence", "l1", "l2", "l3", "bac+3"],
+        "Master": ["master", "m1", "m2", "bac+5"],
+        "Doctorat": ["doctorat", "phd", "these", "bac+8"]
+    }
+    
+    for niveau, keywords in niveau_keywords.items():
+        for kw in keywords:
+            if kw in user_text:
+                elements["niveau"] = niveau
+                break
+        if elements["niveau"]:
+            break
+    
+    # Technologies par département
+    techs_par_departement = {
+        "Génie Informatique": ["react", "next.js", "django", "python", "javascript", "typescript", "node.js", "php", "java", "flutter", "tensorflow", "pytorch", "docker", "git"],
+        "Génie Civil": ["autocad", "revit", "civil 3d", "etabs", "sap2000", "robot structural", "archicad", "tekla", "primavera"],
+        "Génie Électrique": ["matlab", "simulink", "plecs", "pspice", "autocad electrical", "see electrical", "epanet", "dialux"],
+        "Génie Électronique": ["arduino", "raspberry pi", "fpga", "vhdl", "verilog", "altium", "kicad", "eagle", "matlab", "proteus"],
+        "Génie Mécanique": ["solidworks", "catia", "autocad", "inventor", "ansys", "abaqus", "comsol", "fusion 360", "nx"]
+    }
+    
+    if elements["departement"]:
+        for tech in techs_par_departement.get(elements["departement"], []):
+            if tech in user_text:
+                elements["technologies"].append(tech)
+    
+    # Questions naturelles à poser
+    questions = []
+    if not elements["departement"]:
+        questions.append("Dans quel département êtes-vous ? (Génie informatique, civil, électrique, électronique ou mécanique ?)")
+    elif elements["departement"] == "Génie Informatique" and not elements["technologies"]:
+        questions.append("Quelles technologies ou langages de programmation utilisez-vous habituellement ?")
+    elif elements["departement"] in ["Génie Civil", "Génie Mécanique"] and not elements["technologies"]:
+        questions.append("Quels logiciels de conception maîtrisez-vous ?")
+    
+    if not elements["niveau"]:
+        questions.append("À quel niveau d'études êtes-vous ? (Licence, Master ou Doctorat ?)")
+    
+    # Vérifier si on peut proposer des sujets
+    peut_proposer = (
+        elements["departement"] is not None and 
+        (len(elements["technologies"]) > 0 or elements["departement"] in ["Génie Civil", "Génie Mécanique"]) and
+        elements["niveau"] is not None
+    )
+    
     return {
-        "llm_available": llm is not None,
-        "sujets_csv_initialized": SUJETS_CSV_INITIALIZED,
-        "sujets_csv_count": len(SUJETS_CSV_CACHE),
+        "compris": len([v for v in elements.values() if v]) > 0,
+        "contexte": f"Étudiant en {elements['departement'] or 'département non précisé'} - {elements['niveau'] or 'niveau non précisé'}",
+        "elements_identifies": {k: v for k, v in elements.items() if v},
+        "questions_a_poser": questions if questions else None,
+        "peut_proposer_sujets": peut_proposer
     }
 
 # ======================
-# VECTEUR STORE SUJETS CSV + CRITÈRES DOYEN
+# RÉPONSE EXPERT HUMAIN
 # ======================
 
-SUJETS_VECTORSTORE = None  # objet Chroma
+def repondre_comme_expert(question: str, historique: str = "", analyse: Dict = None) -> str:
+    """Répond comme le ferait un vrai expert humain."""
+    if not llm:
+        return repondre_sans_llm(question, analyse)
+    
+    # Construire le contexte de la conversation
+    contexte_utilisateur = ""
+    if analyse and analyse.get("elements_identifies"):
+        elements = analyse["elements_identifies"]
+        if elements.get("departement"):
+            contexte_utilisateur += f"L'étudiant est en {elements['departement']}. "
+        if elements.get("niveau"):
+            contexte_utilisateur += f"Niveau: {elements['niveau']}. "
+        if elements.get("technologies"):
+            contexte_utilisateur += f"Connaît: {', '.join(elements['technologies'])}. "
+    
+    prompt = f"""
+    Tu es un professeur et expert en encadrement de mémoires à la Faculté des Sciences de l'Ingénieur.
+    Tu dialogues avec un étudiant pour l'aider à trouver son sujet de mémoire.
+    
+    **TON COMPORTEMENT:**
+    - Sois naturel, comme dans une vraie conversation
+    - Ne te présente PAS à chaque message
+    - Utilise un langage humain, pas de formatage robotique
+    - Pose UNE question à la fois si besoin de précisions
+    - Adapte-toi au département de l'étudiant
+    
+    **CE QUE JE SAIS DÉJÀ SUR L'ÉTUDIANT:**
+    {contexte_utilisateur if contexte_utilisateur else "Nouvel étudiant, je ne sais rien encore"}
+    
+    **HISTORIQUE RÉCENT:**
+    {historique if historique else "Début de conversation"}
+    
+    **MESSAGE DE L'ÉTUDIANT:**
+    "{question}"
+    
+    **TA RÉPONSE (naturelle, humaine):**
+    """
+    
+    try:
+        response = llm.invoke(prompt)
+        reponse = response.content if hasattr(response, 'content') else str(response)
+        return reponse.strip()
+    except Exception as e:
+        print(f"Erreur LLM: {e}")
+        return repondre_sans_llm(question, analyse)
+
+def repondre_sans_llm(question: str, analyse: Dict = None) -> str:
+    """Fallback quand LLM indisponible"""
+    if len(question.strip()) < 10:
+        return "Je n'ai pas bien compris. Pourriez-vous préciser ?"
+    
+    if not analyse or not analyse.get("elements_identifies"):
+        return "Pour mieux vous guider, pourriez-vous me dire dans quel département vous êtes et votre niveau ?"
+    
+    departement = analyse.get("elements_identifies", {}).get("departement")
+    if departement:
+        return f"D'accord, vous êtes en {departement}. Parlez-moi un peu plus de ce qui vous intéresse dans ce domaine."
+    
+    return "Intéressant. Pouvez-vous m'en dire plus sur votre projet ?"
+
+# ======================
+# RECOMMANDATION DE SUJETS (EXPORTÉE)
+# ======================
+
+def recommander_sujets_llm(
+    interests: List[str],
+    sujets: List[Dict],
+    critères: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Recommande des sujets de manière experte"""
+    
+
+def recommander_sujets_llm(
+    interests: List[str],
+    sujets: List[Dict],
+    critères: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Recommande des sujets de manière experte avec scores normalisés"""
+    if not sujets:
+        return []
+    
+    # Si LLM n'est pas disponible, utiliser le fallback intelligent
+    if not llm:
+        return fallback_recommendation(interests, sujets, critères)
+
+    
+    # Filtrer et noter les sujets
+    results = []
+    for sujet in sujets[:10]:  # Limiter à 10 pour la performance
+        score = 0
+        raisons = []
+        
+        # Vérifier les intérêts
+        titre = sujet.get("titre", "").lower()
+        description = sujet.get("description", "").lower()
+        keywords = sujet.get("keywords", "").lower()
+        
+        for interest in interests:
+            interest_lower = interest.lower()
+            if interest_lower in titre:
+                score += 30
+                raisons.append(f"Correspond à votre intérêt pour '{interest}'")
+            elif interest_lower in keywords:
+                score += 20
+                raisons.append(f"Lié à votre intérêt pour '{interest}'")
+            elif interest_lower in description:
+                score += 10
+        
+        # Vérifier le niveau
+        niveau_etudiant = critères.get("niveau", "").lower()
+        niveau_sujet = sujet.get("niveau", "").lower()
+        if niveau_etudiant and niveau_sujet:
+            if niveau_etudiant in niveau_sujet or niveau_sujet in niveau_etudiant:
+                score += 20
+                raisons.append(f"Niveau adapté: {niveau_sujet}")
+        
+        # Vérifier le domaine
+        domaine_etudiant = critères.get("domaine", "").lower()
+        domaine_sujet = sujet.get("domaine", "").lower()
+        if domaine_etudiant and domaine_sujet:
+            if domaine_etudiant in domaine_sujet or domaine_sujet in domaine_etudiant:
+                score += 25
+                raisons.append(f"Dans votre domaine: {domaine_sujet}")
+        
+        if score > 30:  # Seuil minimum de pertinence
+            results.append({
+                "sujet": sujet,
+                "score": min(score, 100),
+                "raisons": raisons[:3],  # Garder les 3 meilleures raisons
+                "critères_respectés": ["Pertinence", "Adéquation profil"]
+            })
+    
+    # Trier par score
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return results[:5]  # Retourner les 5 meilleurs
+
+def fallback_recommendation(
+    interests: List[str], 
+    sujets: List[Dict], 
+    critères: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Fallback intelligent pour les recommandations sans LLM"""
+    results = []
+    
+    # Filtrer les sujets pertinents
+    for sujet in sujets[:20]:
+        score = 0
+        raisons = []
+        
+        # Vérifier les intérêts dans le titre
+        titre = sujet.get("titre", "").lower()
+        description = sujet.get("description", "").lower()
+        keywords = sujet.get("keywords", "").lower()
+        
+        for interest in interests:
+            interest_lower = interest.lower()
+            if not interest_lower or len(interest_lower) < 3:
+                continue
+                
+            if interest_lower in titre:
+                score += 25
+                raisons.append(f"Correspond à '{interest}' dans le titre")
+            elif interest_lower in keywords:
+                score += 20
+                raisons.append(f"Lié à '{interest}' dans les mots-clés")
+            elif interest_lower in description:
+                score += 15
+                raisons.append(f"En lien avec '{interest}'")
+        
+        # Vérifier le niveau
+        niveau_etudiant = critères.get("niveau", "").lower()
+        niveau_sujet = sujet.get("niveau", "").lower()
+        if niveau_etudiant and niveau_sujet:
+            if niveau_etudiant in niveau_sujet or niveau_sujet in niveau_etudiant:
+                score += 20
+                raisons.append(f"Niveau adapté: {niveau_sujet}")
+        
+        # Vérifier le domaine
+        domaine_etudiant = critères.get("domaine", "").lower()
+        domaine_sujet = sujet.get("domaine", "").lower()
+        if domaine_etudiant and domaine_sujet:
+            if domaine_etudiant in domaine_sujet or domaine_sujet in domaine_etudiant:
+                score += 15
+                raisons.append(f"Dans le domaine: {domaine_sujet}")
+        
+        # Ne garder que les sujets avec un score minimum
+        if score > 20:
+            # Normaliser le score entre 0 et 100
+            # On considère que le score maximum possible est 80
+            score_normalise = min(100, int((score / 80) * 100))
+            
+            results.append({
+                "sujet": sujet,
+                "score": score_normalise,
+                "raisons": raisons[:3],
+                "critères_respectés": ["Pertinence", "Adéquation profil"]
+            })
+    
+    # Trier par score
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return results[:10]
+# ======================
+# GÉNÉRATION DE SUJETS (EXPORTÉE)
+# ======================
+
+def générer_sujets_llm(params: Dict[str, Any], count: int = 3) -> List[Dict[str, Any]]:
+    """Génère des sujets de manière experte"""
+    if not llm:
+        return generate_default_subjects(params, count)
+    
+    prompt = f"""
+    En tant qu'expert en encadrement de mémoires à la Faculté des Sciences de l'Ingénieur,
+    propose {count} sujets de mémoire pertinents pour un étudiant.
+    
+    **PROFIL DE L'ÉTUDIANT:**
+    - Département: {params.get('domaine', 'Génie Informatique')}
+    - Niveau: {params.get('niveau', 'Master')}
+    - Intérêts: {', '.join(params.get('interests', ['Général'])) if isinstance(params.get('interests'), list) else params.get('interests', 'Général')}
+    
+    **FORMAT DE RÉPONSE (JSON uniquement):**
+    [
+      {{
+        "titre": "Titre clair et précis",
+        "description": "Description en 2-3 phrases",
+        "keywords": "mot-clé1, mot-clé2, mot-clé3",
+        "domaine": "département concerné",
+        "niveau": "niveau adapté",
+        "problématique": "Question de recherche",
+        "méthodologie": "Approche suggérée",
+        "difficulté": "facile/moyenne/difficile",
+        "durée_estimée": "6 mois"
+      }}
+    ]
+    """
+    
+    try:
+        response = llm.invoke(prompt)
+        reponse = response.content if hasattr(response, 'content') else str(response)
+        
+        # Extraire le JSON
+        json_match = re.search(r'\[.*\]', reponse, re.DOTALL)
+        if json_match:
+            sujets = json.loads(json_match.group())
+            return sujets[:count]
+    except Exception as e:
+        print(f"Erreur génération: {e}")
+    
+    return generate_default_subjects(params, count)
+
+def generate_default_subjects(params: Dict[str, Any], count: int) -> List[Dict[str, Any]]:
+    """Génère des sujets par défaut"""
+    departement = params.get("domaine", "Génie Informatique")
+    niveau = params.get("niveau", "Master")
+    
+    sujets_par_departement = {
+        "Génie Informatique": [
+            {
+                "titre": "Développement d'une application web pour la gestion de projets académiques",
+                "description": "Concevoir une plateforme collaborative pour le suivi des projets étudiants.",
+                "keywords": "react, django, web, base de données",
+                "problématique": "Comment faciliter le suivi des projets académiques ?",
+                "méthodologie": "Analyse des besoins, conception, développement, tests",
+                "difficulté": "moyenne",
+                "durée_estimée": "6 mois"
+            },
+            {
+                "titre": "Système de recommandation de sujets de mémoire par machine learning",
+                "description": "Développer un algorithme qui suggère des sujets adaptés au profil.",
+                "keywords": "machine learning, python, recommandation",
+                "problématique": "Comment personnaliser les recommandations de sujets ?",
+                "méthodologie": "Collecte de données, modélisation, entraînement, évaluation",
+                "difficulté": "difficile",
+                "durée_estimée": "8 mois"
+            }
+        ],
+        "Génie Civil": [
+            {
+                "titre": "Analyse comparative des matériaux écologiques en construction",
+                "description": "Étudier les performances des nouveaux matériaux durables.",
+                "keywords": "béton écologique, durabilité, résistance",
+                "problématique": "Quels matériaux alternatifs pour une construction durable ?",
+                "méthodologie": "Étude expérimentale, tests en laboratoire, analyse",
+                "difficulté": "moyenne",
+                "durée_estimée": "6 mois"
+            }
+        ]
+    }
+    
+    # Sélectionner les sujets du département ou utiliser un fallback
+    sujets = sujets_par_departement.get(departement, sujets_par_departement["Génie Informatique"])
+    
+    results = []
+    for i, sujet in enumerate(sujets[:count]):
+        sujet_copie = sujet.copy()
+        sujet_copie["domaine"] = departement
+        sujet_copie["niveau"] = niveau
+        results.append(sujet_copie)
+    
+    return results
+
+# ======================
+# ANALYSE DE SUJET (EXPORTÉE)
+# ======================
+
+def analyser_sujet(sujet_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Analyse un sujet comme le ferait un expert"""
+    if not llm:
+        return get_fallback_analysis(sujet_data)
+    
+    prompt = f"""
+    En tant qu'expert en évaluation de mémoires, analyse ce sujet:
+    
+    **SUJET:**
+    Titre: {sujet_data.get('titre', 'Non spécifié')}
+    Domaine: {sujet_data.get('domaine', 'Général')}
+    Description: {sujet_data.get('description', 'Non spécifiée')}
+    
+    **FORMAT DE RÉPONSE (JSON):**
+    {{
+        "pertinence": 75,
+        "points_forts": ["point1", "point2"],
+        "points_faibles": ["point1", "point2"],
+        "suggestions": ["suggestion1", "suggestion2"],
+        "recommandations": ["recommandation1", "recommandation2"]
+    }}
+    """
+    
+    try:
+        response = llm.invoke(prompt)
+        reponse = response.content if hasattr(response, 'content') else str(response)
+        
+        json_match = re.search(r'\{.*\}', reponse, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+    except Exception as e:
+        print(f"Erreur analyse: {e}")
+    
+    return get_fallback_analysis(sujet_data)
+
+def get_fallback_analysis(sujet_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Analyse de secours"""
+    return {
+        "pertinence": 75,
+        "points_forts": ["Sujet bien structuré", "Domaine porteur"],
+        "points_faibles": ["Méthodologie à préciser"],
+        "suggestions": ["Approfondir la revue de littérature"],
+        "recommandations": ["Sujet prometteur à développer"]
+    }
+
+# ======================
+# AUTRES FONCTIONS UTILES
+# ======================
 
 def get_acceptance_criteria() -> Dict[str, Any]:
-    """
-    Retourne les critères d'acceptation / rejet des sujets de mémoire,
-    basés explicitement sur les directives du doyen.
-    """
+    """Retourne les critères d'acceptation des sujets"""
     return {
         "critères_acceptation": [
-            "Capacité de l’étudiant à traiter le sujet en tenant compte de la disponibilité des données",
-            "Complexité du sujet adaptée au niveau de l’étudiant",
-            "Sujet réalisable dans les contraintes temporelles et financières",
-            "Pertinence du sujet par rapport au domaine de spécialisation",
-            "Caractère innovant ou apport original du travail proposé",
-            "Le sujet dépasse un simple travail pratique de cours (approche recherche, analyse, réflexion)",
-            "Problématique clairement formulée, précise et pertinente",
-            "Approche méthodologique cohérente, solide et adaptée aux objectifs",
+            "Pertinence académique",
+            "Faisabilité technique",
+            "Originalité",
+            "Adéquation au niveau"
         ],
         "critères_rejet": [
-            "Formulation grammaticale du sujet incorrecte ou peu compréhensible",
-            "Sujet inadéquat avec le niveau d’un travail de fin d’études",
-            "Sujet inadéquat avec la spécialité concernée",
-            "Sujet déjà traité de manière plus pertinente ou plus approfondie sans valeur ajoutée claire",
-        ],
-        "conseils_pratiques": [
-            "Vérifiez que le sujet est réalisable avec les données et les ressources dont vous disposez.",
-            "Adaptez la complexité du sujet à votre niveau (Licence, Master, etc.).",
-            "Expliquez en quoi votre travail est différent et plus riche qu’un simple projet de cours.",
-            "Soignez particulièrement la formulation du titre et de la problématique (clarté, français correct).",
-            "Clarifiez votre approche méthodologique : quelles étapes, quelles données, quelles méthodes ?",
-        ],
-        "message_doyen": (
-            "En général, un mémoire est jugé acceptable lorsqu’il respecte plusieurs exigences, "
-            "notamment: (1) la capacité de l’étudiant à traiter le sujet, en tenant compte de la "
-            "disponibilité des données, de la complexité des concepts au regard du niveau de l’étudiant, "
-            "ainsi que des contraintes temporelles et financières; (2) la pertinence du sujet par rapport "
-            "au domaine de spécialisation; (3) le caractère innovant du travail proposé; (4) la distinction "
-            "du sujet par rapport à un simple travail pratique de cours; (5) la clarté et la pertinence de la "
-            "problématique à traiter; (6) la cohérence et la solidité des approches méthodologiques retenues. "
-            "Les motifs fréquents de rejet concernent: (1) une mauvaise formulation grammaticale du sujet; "
-            "(2) une inadéquation avec le niveau d’un travail de fin d’études ou avec la spécialité; (3) "
-            "le fait que le sujet ait déjà été traité de manière plus pertinente ou approfondie."
-        ),
+            "Sujet trop vague",
+            "Duplication sans valeur ajoutée",
+            "Ressources insuffisantes"
+        ]
     }
+
+def get_tips() -> Dict[str, List[str]]:
+    """Retourne des conseils pour la rédaction"""
+    return {
+        "choix_sujet": [
+            "Choisissez un sujet qui vous passionne",
+            "Vérifiez la disponibilité des ressources"
+        ],
+        "methodologie": [
+            "Définissez clairement votre problématique",
+            "Choisissez une méthodologie adaptée"
+        ]
+    }
+
+# ======================
+# VECTOR STORE POUR CHROMADB
+# ======================
+
+SUJETS_VECTORSTORE = None  # Cache pour le vector store
 
 def build_sujets_vectorstore(persist_directory: Optional[str] = None):
     """
-    Construit (ou recharge) un vecteur store (Chroma) à partir:
-    - de la base CSV Sujet_EtudiantsB.csv
-    - des critères du doyen
-
-    Si persist_directory est fourni et existe déjà, on recharge au lieu de reconstruire.
+    Construit ou recharge le vector store Chroma pour la recherche sémantique.
+    Cette fonction est appelée au démarrage de l'application.
     """
     global SUJETS_VECTORSTORE
 
+    # Si déjà construit, retourner
     if SUJETS_VECTORSTORE is not None:
         return SUJETS_VECTORSTORE
 
+    # Vérifier que les dépendances sont disponibles
     if not llm or not Chroma or not GoogleGenerativeAIEmbeddings or not Document:
-        print("⚠️ LLM/embeddings non dispo, pas de vecteur store.")
+        print("⚠️ Chroma ou embeddings non disponibles, vector store désactivé")
         return None
 
     try:
+        # Initialiser les embeddings
         embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 
         # 1) Si on a un dossier de persistance existant, on recharge
@@ -199,11 +650,12 @@ def build_sujets_vectorstore(persist_directory: Optional[str] = None):
             except Exception as e:
                 print(f"⚠️ Impossible de recharger le vecteur store existant, reconstruction: {e}")
 
-        # 2) Sinon, on reconstruit à partir du CSV + critères
+        # 2) Sinon, on reconstruit à partir du CSV
         sujets = load_sujets_csv()
         docs: List[Document] = []
 
         for i, s in enumerate(sujets):
+            # Créer un document texte à partir des informations du sujet
             content = (
                 f"Titre: {s.get('titre','')}\n"
                 f"Domaine: {s.get('domaine','')}\n"
@@ -223,56 +675,58 @@ def build_sujets_vectorstore(persist_directory: Optional[str] = None):
                         "titre": s.get("titre", ""),
                         "domaine": s.get("domaine", ""),
                         "niveau": s.get("niveau", ""),
-                        "statut": s.get("statut", ""),
                     },
                 )
             )
 
-        # Ajouter un document avec les critères du doyen
+        # Ajouter les critères d'acceptation comme document de référence
         criteria = get_acceptance_criteria()
         criteres_txt = (
-            "CRITÈRES D'ACCEPTATION:\n- "
+            "CRITÈRES D'ACCEPTATION D'UN SUJET DE MÉMOIRE:\n- "
             + "\n- ".join(criteria["critères_acceptation"])
             + "\n\nCRITÈRES DE REJET:\n- "
             + "\n- ".join(criteria["critères_rejet"])
-            + "\n\nMESSAGE DU DOYEN:\n"
-            + criteria.get("message_doyen", "")
         )
-
+        
         docs.append(
             Document(
                 page_content=criteres_txt,
-                metadata={"source": "doyen_criteria"},
+                metadata={"source": "acceptance_criteria"},
             )
         )
 
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-
-        if persist_directory:
-            os.makedirs(persist_directory, exist_ok=True)
-            SUJETS_VECTORSTORE = Chroma.from_documents(
-                documents=docs,
-                embedding=embeddings,
-                persist_directory=persist_directory,
-            )
+        if docs:
+            if persist_directory:
+                os.makedirs(persist_directory, exist_ok=True)
+                SUJETS_VECTORSTORE = Chroma.from_documents(
+                    documents=docs,
+                    embedding=embeddings,
+                    persist_directory=persist_directory,
+                )
+                print(f"✅ Vector store construit avec {len(docs)} documents et persisté dans {persist_directory}")
+            else:
+                SUJETS_VECTORSTORE = Chroma.from_documents(
+                    documents=docs,
+                    embedding=embeddings,
+                )
+                print(f"✅ Vector store construit avec {len(docs)} documents (en mémoire)")
         else:
-            SUJETS_VECTORSTORE = Chroma.from_documents(
-                documents=docs,
-                embedding=embeddings,
-            )
+            print("⚠️ Aucun document pour construire le vector store")
+            return None
 
-        print(f"✅ Vector store construit avec {len(docs)} documents")
         return SUJETS_VECTORSTORE
 
     except Exception as e:
-        print(f"⚠️ Erreur lors de la construction du vecteur store: {e}")
-        SUJETS_VECTORSTORE = None
+        print(f"⚠️ Erreur lors de la construction du vector store: {e}")
+        import traceback
+        traceback.print_exc()
         return None
+
 
 def search_sujets_context(query: str, k: int = 5) -> List[Document]:
     """
-    Recherche les documents les plus proches d'une requête.
-    Utilisé pour fournir du contexte à l'IA (exemples réels, critères, etc.)
+    Recherche les documents les plus pertinents dans le vector store.
+    Utilisé pour fournir du contexte à l'IA.
     """
     vs = build_sujets_vectorstore()
     if not vs:
@@ -280,586 +734,23 @@ def search_sujets_context(query: str, k: int = 5) -> List[Document]:
     try:
         return vs.similarity_search(query, k=k)
     except Exception as e:
-        print(f"⚠️ Erreur lors de la recherche dans le vecteur store: {e}")
+        print(f"⚠️ Erreur lors de la recherche: {e}")
         return []
-
 # ======================
-# ANALYSE DE SUJET
-# ======================
-
-def get_fallback_analysis(sujet_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Analyse de secours sans IA"""
-    return {
-        "pertinence": 75,
-        "points_forts": [
-            f"Sujet dans le domaine: {sujet_data.get('domaine', 'Général')}",
-            "Problématique identifiée dans les données",
-            f"Niveau adapté: {sujet_data.get('niveau', 'L3')}",
-        ],
-        "points_faibles": [
-            "Analyse automatique limitée sans IA",
-            "Suggestions génériques",
-            "Validation humaine requise",
-        ],
-        "suggestions": [
-            "Consulter un enseignant référent pour validation",
-            "Préciser la méthodologie de recherche",
-            "Définir des objectifs spécifiques et mesurables",
-        ],
-        "recommandations": [
-            "Sujet potentiellement intéressant à approfondir",
-            "Valider la faisabilité avec un expert",
-            "Étudier des travaux similaires pour inspiration",
-        ],
-    }
-
-def analyser_sujet(sujet_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Analyse un sujet avec LangChain, en tenant compte des critères du doyen et de la base CSV."""
-    if not llm:
-        return get_fallback_analysis(sujet_data)
-
-    criteria = get_acceptance_criteria()
-
-    # Recherche de contexte pertinent (sujets similaires + critères du doyen)
-    query = (
-        f"{sujet_data.get('titre','')} "
-        f"{sujet_data.get('domaine','')} "
-        f"{sujet_data.get('niveau','')} "
-        f"{sujet_data.get('keywords','')}"
-    )
-    retrieved_docs = search_sujets_context(query, k=5)
-
-    init_note = (
-        "NOTE: La base réelle de sujets étudiants n'est pas encore entièrement initialisée, "
-        "l'analyse repose donc surtout sur les critères du doyen et quelques exemples partiels.\n"
-        if not SUJETS_CSV_INITIALIZED
-        else ""
-    )
-
-    prompt_template = """
-    Tu es un expert en évaluation de sujets de mémoire universitaire (MemoBot).
-    Tu dois évaluer un sujet comme le ferait un doyen d'université.
-
-    === NOTE D'ÉTAT ===
-    {init_note}
-
-    === DIRECTIVES DU DOYEN (CRITÈRES) ===
-    Critères d'acceptation principaux:
-    {criteres_acceptation}
-
-    Critères de rejet fréquents:
-    {criteres_rejet}
-
-    Message du doyen:
-    {message_doyen}
-
-    === CONTEXTE RÉEL (BASE SUJETS + DOYEN) ===
-    Voici quelques extraits pertinents issus de notre base interne (sujets réels + critères du doyen):
-    {contexte_retrieved}
-
-    === SUJET À ANALYSER ===
-    TITRE: {titre}
-    DOMAINE: {domaine}
-    NIVEAU: {niveau}
-    FACULTÉ: {faculté}
-    PROBLÉMATIQUE: {problematique}
-    DESCRIPTION: {description}
-    MOTS-CLÉS: {keywords}
-
-    === TÂCHE ===
-    Analyse ce sujet de mémoire en respectant les critères du doyen et en te basant sur les exemples.
-    Fais une analyse détaillée selon ces critères:
-    1. Pertinence générale (0-100%)
-    2. Points forts (3-5 points)
-    3. Points faibles (2-3 points)
-    4. Suggestions d'amélioration (3-5 suggestions)
-    5. Recommandations finales (2-3 recommandations)
-
-    Réponds en JSON avec cette structure EXACTE:
-    {{
-        "pertinence": 85,
-        "points_forts": ["point1", "point2", "point3"],
-        "points_faibles": ["point1", "point2"],
-        "suggestions": ["suggestion1", "suggestion2", "suggestion3"],
-        "recommandations": ["recommandation1", "recommandation2"]
-    }}
-    """
-
-    try:
-        # Concaténation du contenu des documents récupérés
-        contexte_retrieved = ""
-        for d in retrieved_docs:
-            contexte_retrieved += f"\n---\n{d.page_content}\n"
-
-        prompt = ChatPromptTemplate.from_template(prompt_template)
-        chain = prompt | llm | StrOutputParser()
-
-        raw = chain.invoke(
-            {
-                "titre": sujet_data.get("titre", ""),
-                "domaine": sujet_data.get("domaine", ""),
-                "niveau": sujet_data.get("niveau", ""),
-                "faculté": sujet_data.get("faculté", ""),
-                "problematique": sujet_data.get("problématique", sujet_data.get("problematique", "")),
-                "description": sujet_data.get("description", ""),
-                "keywords": sujet_data.get("keywords", ""),
-                "criteres_acceptation": "\n- " + "\n- ".join(criteria["critères_acceptation"]),
-                "criteres_rejet": "\n- " + "\n- ".join(criteria["critères_rejet"]),
-                "message_doyen": criteria.get("message_doyen", ""),
-                "contexte_retrieved": contexte_retrieved or "Pas de contexte disponible.",
-                "init_note": init_note,
-            }
-        )
-
-        # Nettoyage de la sortie (enlever ```json, ``` etc.)
-        cleaned = raw.strip()
-        cleaned = cleaned.replace("```json", "").replace("```", "").strip()
-
-        try:
-            parsed = json.loads(cleaned)
-        except json.JSONDecodeError as e:
-            print(f"⚠️ Erreur JSON brute dans analyser_sujet: {e}")
-            print(cleaned)
-            return get_fallback_analysis(sujet_data)
-
-        if not isinstance(parsed, dict):
-            return get_fallback_analysis(sujet_data)
-
-        for key in ["pertinence", "points_forts", "points_faibles", "suggestions", "recommandations"]:
-            if key not in parsed:
-                return get_fallback_analysis(sujet_data)
-
-        return parsed
-
-    except Exception as e:
-        print(f"⚠️ Erreur dans analyser_sujet: {e}")
-        return get_fallback_analysis(sujet_data)
-
-# ======================
-# RECOMMANDATION DE SUJETS
+# EXPORTATIONS
 # ======================
 
-def fallback_recommendation(interests: List[str], sujets: List[Dict]) -> List[Dict[str, Any]]:
-    """Recommandation de secours sans IA"""
-    results = []
-
-    if not sujets:
-        return results
-
-    for sujet in sujets[:5]:
-        score = 0
-        matching_points = []
-
-        titre = sujet.get("titre", "").lower()
-        keywords = sujet.get("keywords", "").lower()
-        domaine = sujet.get("domaine", "").lower()
-
-        for interest in interests:
-            interest_lower = interest.lower()
-
-            if interest_lower in titre:
-                score += 30
-                matching_points.append(f"Intérêt '{interest}' dans le titre")
-
-            if interest_lower in keywords:
-                score += 25
-                matching_points.append(f"Intérêt '{interest}' dans les mots-clés")
-
-            if interest_lower in domaine:
-                score += 20
-                matching_points.append(f"Intérêt '{interest}' dans le domaine")
-
-        if score > 0:
-            results.append(
-                {
-                    "id": sujet.get("id", 0),
-                    "score": min(score, 100),
-                    "raisons": matching_points[:3] if matching_points else ["Correspondance générale"],
-                    "critères": [
-                        "Matching automatique par mots-clés",
-                        f"Niveau: {sujet.get('niveau', 'N/A')}",
-                        f"Domaine: {sujet.get('domaine', 'N/A')}",
-                    ],
-                }
-            )
-
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results
-
-def recommander_sujets_llm(
-    interests: List[str],
-    sujets: List[Dict],
-    critères: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    """Recommande des sujets avec LangChain"""
-    if not llm or not sujets:
-        return fallback_recommendation(interests, sujets)
-
-    sujets_text = ""
-    for sujet in sujets[:10]:
-        sujets_text += f"\n• ID: {sujet.get('id', 'N/A')}"
-        sujets_text += f" | Titre: {sujet.get('titre', 'Sans titre')}"
-        sujets_text += f" | Mots-clés: {sujet.get('keywords', '')}"
-        sujets_text += f" | Niveau: {sujet.get('niveau', 'N/A')}"
-        sujets_text += f" | Domaine: {sujet.get('domaine', 'Général')}"
-
-    prompt_template = """
-    Tu es un assistant spécialisé dans la recommandation de sujets de mémoire.
-
-    **PROFIL ÉTUDIANT:**
-    - Intérêts: {interests}
-    - Niveau: {niveau}
-    - Faculté: {faculté}
-    - Domaine: {domaine}
-    - Difficulté: {difficulté}
-
-    **SUJETS DISPONIBLES:**
-    {sujets_text}
-
-    **TÂCHE:**
-    Pour les sujets les plus pertinents, fournis:
-    1. Score de pertinence (0-100) basé sur les intérêts et critères
-    2. 2-3 raisons principales de recommandation
-    3. Critères d'acceptation respectés
-
-    **FORMAT DE RÉPONSE (JSON):**
-    [
-{{
-        "id": 1,
-        "score": 85,
-        "raisons": ["Raison 1", "Raison 2"],
-        "critères": ["Critère 1", "Critère 2"]
-}}
-    ]
-
-    Retourne seulement les 3-5 sujets les plus pertinents, triés par score décroissant.
-    """
-
-    try:
-        prompt = ChatPromptTemplate.from_template(prompt_template)
-        chain = prompt | llm | StrOutputParser()
-
-        response = chain.invoke(
-            {
-                "interests": ", ".join(interests) if interests else "Non spécifié",
-                "niveau": critères.get("niveau", "Non spécifié"),
-                "faculté": critères.get("faculté", "Non spécifiée"),
-                "domaine": critères.get("domaine", "Non spécifié"),
-                "difficulté": critères.get("difficulté", "moyenne"),
-                "sujets_text": sujets_text,
-            }
-        )
-
-        try:
-            json_match = re.search(r"\[.*\]", response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group()
-                result = json.loads(json_str)
-                return result
-        except (json.JSONDecodeError, AttributeError) as e:
-            print(f"⚠️ Erreur parsing JSON recommandation: {e}")
-
-        return fallback_recommendation(interests, sujets)
-
-    except Exception as e:
-        print(f"⚠️ Erreur recommandation LangChain: {e}")
-        return fallback_recommendation(interests, sujets)
-
-# ======================
-# RÉPONSE À UNE QUESTION
-# ======================
-def répondre_question(question: str, contexte: str = None) -> str:
-    """Répond DIRECTEMENT aux questions - version SIMPLIFIÉE et DIRECTE"""
-    if not llm:
-        return f"D'accord, je comprends ta question : '{question}'. Pourrais-tu me dire plus précisément ce que tu recherches ?"
-    
-    # PROMPT ULTRA SIMPLE - PAS DE FORMALITÉS
-    prompt = f"""
-    Tu es MemoBot, assistant conversationnel pour aider les étudiants à trouver des sujets de mémoire.
-    
-    **TÂCHE :** Réponds DIRECTEMENT et NATURELLEMENT à la question de l'étudiant.
-    **STYLE :** Comme si tu parlais à un ami - simple, direct, utile.
-    **NE FAIS PAS :** Ne commence pas par "Bonjour, je suis MemoBot..."
-    **NE FAIS PAS :** Ne liste pas des questions en retour automatiquement
-    
-    CONTEXTE (si utile) :
-    {contexte or 'Pas de contexte'}
-    
-    QUESTION DE L'ÉTUDIANT :
-    "{question}"
-    
-    TA RÉPONSE (directe, naturelle, utile) :
-    """
-    
-    try:
-        # Appel DIRECT sans LangChain complexe
-        response = llm.invoke(prompt)
-        
-        # Extraire le texte
-        if hasattr(response, 'content'):
-            answer = response.content.strip()
-        else:
-            answer = str(response).strip()
-        
-        # NETTOYAGE : Enlever les salutations automatiques
-        unwanted_starts = [
-            "Bonjour ! Je suis MemoBot",
-            "Je suis MemoBot",
-            "En tant que MemoBot",
-            "Bonjour,",
-            "Salut,",
-            "Hello,",
-        ]
-        
-        for unwanted in unwanted_starts:
-            if answer.startswith(unwanted):
-                # Garder seulement après la salutation
-                answer = answer[len(unwanted):].strip()
-                # Supprimer la ponctuation qui suit
-                if answer.startswith(','):
-                    answer = answer[1:].strip()
-                if answer.startswith('!'):
-                    answer = answer[1:].strip()
-        
-        # Si la réponse est vide ou trop courte, réponse alternative
-        if not answer or len(answer) < 10:
-            return f"D'accord, je comprends que tu cherches : '{question}'. Qu'est-ce qui t'intéresse particulièrement dans ce domaine ?"
-        
-        return answer
-        
-    except Exception as e:
-        print(f"⚠️ Erreur dans répondre_question: {e}")
-        return f"Je vois que tu parles de '{question[:50]}...'. C'est intéressant ! Dis-m'en plus sur ce que tu recherches exactement."
-# Remplacer la fonction répondre_question_cohérente par :
-def répondre_question_cohérente(question: str, contexte: str = None, user_preferences: Dict = None) -> str:
-    """Version améliorée qui utilise les préférences utilisateur"""
-    if not llm:
-        return f"Je comprends : '{question}'. Pourrais-tu préciser par rapport à notre discussion ?"
-    
-    # Construire le contexte utilisateur
-    user_context = ""
-    if user_preferences:
-        user_context = "INFORMATIONS UTILISATEUR:\n"
-        if user_preferences.get('level'):
-            user_context += f"- Niveau: {user_preferences['level']}\n"
-        if user_preferences.get('faculty'):
-            user_context += f"- Faculté: {user_preferences['faculty']}\n"
-        if user_preferences.get('interests'):
-            user_context += f"- Intérêts: {user_preferences['interests']}\n"
-    
-    prompt = f"""
-    TU ES MEMOBOT - ASSISTANT POUR SUJETS DE MÉMOIRE
-    
-    **RÈGLES IMPORTANTES :**
-    1. Sois naturel et conversationnel
-    2. Pose des questions pertinentes pour mieux comprendre les besoins
-    3. Utilise les informations sur l'utilisateur si disponibles
-    4. Guide vers la découverte d'un sujet pertinent
-    
-    **CONTEXTE UTILISATEUR :**
-    {user_context if user_context else "Première conversation avec cet utilisateur"}
-    
-    **HISTORIQUE DE CONVERSATION :**
-    {contexte if contexte else "Début de la conversation"}
-    
-    **QUESTION DE L'ÉTUDIANT :**
-    "{question}"
-    
-    **TON RÔLE :**
-    Tu dois aider à clarifier le projet de mémoire en posant des questions comme :
-    - Quel est votre domaine d'étude ?
-    - Quels sont vos centres d'intérêt ?
-    - Avez-vous des contraintes de temps ?
-    - Quelles technologies maîtrisez-vous ?
-    
-    Ne propose PAS de sujets spécifiques immédiatement. Guide la conversation.
-    
-    **TA RÉPONSE (en français, naturel) :**
-    """
-    
-    try:
-        response = llm.invoke(prompt)
-        answer = response.content if hasattr(response, 'content') else str(response)
-        
-        # Nettoyage basique
-        answer = answer.strip()
-        
-        return answer if answer else "Je vois que vous cherchez des idées. Pourriez-vous me dire quel domaine vous intéresse ?"
-        
-    except Exception as e:
-        print(f"⚠️ Erreur dans répondre_question_cohérente: {e}")
-        return "Je comprends votre question. Pourriez-vous préciser votre domaine d'étude et vos centres d'intérêt ?"
-
-
-# ======================
-# GÉNÉRATION DE SUJETS
-# ======================
-
-def generate_default_subjects(params: Dict[str, Any], count: int) -> List[Dict[str, Any]]:
-    """Génère des sujets par défaut sans IA"""
-    domaine = params.get("domaine", "Informatique")
-    niveau = params.get("niveau", "Master")
-    faculté = params.get("faculté", "Sciences")
-
-    subjects = []
-    for _ in range(count):
-        subjects.append(
-            {
-                "titre": f"Application de l'IA dans le domaine du {domaine}",
-                "problématique": (
-                    f"Comment l'intelligence artificielle peut-elle transformer les pratiques et "
-                    f"processus dans le {domaine} ?"
-                ),
-                "keywords": f"IA, {domaine}, transformation, innovation, technologie",
-                "description": (
-                    f"Étude des applications potentielles de l'intelligence artificielle dans le secteur du {domaine}, "
-                    "avec une analyse des impacts et des défis à relever."
-                ),
-                "methodologie": "Revue de littérature, analyse comparative, étude de cas",
-                "difficulté": "moyenne",
-                "durée_estimée": "6 mois",
-                "domaine": domaine,
-                "niveau": niveau,
-                "faculté": faculté,
-                "original": True,
-                "generated_at": datetime.utcnow().isoformat(),
-            }
-        )
-
-    return subjects
-
-def générer_sujets_llm(params: Dict[str, Any], count: int) -> List[Dict[str, Any]]:
-    """Génère des sujets avec LangChain"""
-    if not llm:
-        return generate_default_subjects(params, count)
-
-    prompt_template = """
-    Tu es un générateur de sujets de mémoire universitaires.
-
-    **SPÉCIFICATIONS:**
-    - Intérêts: {interests}
-    - Domaine: {domaine}
-    - Niveau: {niveau}
-    - Faculté: {faculté}
-    - Nombre de sujets: {count}
-
-    **EXIGENCES POUR CHAQUE SUJET:**
-    1. Un titre précis et accrocheur
-    2. Une problématique claire et pertinente
-    3. 5-7 mots-clés séparés par des virgules
-    4. Une description concise (2-3 phrases)
-    5. Une méthodologie suggérée
-    6. Une difficulté (facile/moyenne/difficile)
-    7. Une durée estimée (ex: 3-6 mois)
-
-    **FORMAT DE RÉPONSE (JSON):**
-    [
-      {{
-        "titre": "Titre du sujet",
-        "problématique": "Problématique de recherche",
-        "keywords": "mot1, mot2, mot3, mot4, mot5",
-        "description": "Description du sujet",
-        "methodologie": "Méthodologie suggérée",
-        "difficulté": "moyenne",
-        "durée_estimée": "6 mois"
-      }}
-    ]
-
-    Génère exactement {count} sujets originaux, pertinents et réalisables.
-    """
-
-    try:
-        prompt = ChatPromptTemplate.from_template(prompt_template)
-        chain = prompt | llm | StrOutputParser()
-
-        response = chain.invoke(
-            {
-                "interests": params.get("interests", "Recherche académique"),
-                "domaine": params.get("domaine", "Général"),
-                "niveau": params.get("niveau", "L3"),
-                "faculté": params.get("faculté", "Sciences"),
-                "count": count,
-            }
-        )
-
-        try:
-            json_match = re.search(r"\[.*\]", response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group()
-                sujets = json.loads(json_str)
-
-                for sujet in sujets:
-                    sujet["domaine"] = params.get("domaine", "Général")
-                    sujet["niveau"] = params.get("niveau", "L3")
-                    sujet["faculté"] = params.get("faculté", "Sciences")
-                    sujet["original"] = True
-                    sujet["generated_at"] = datetime.utcnow().isoformat()
-
-                return sujets[:count]
-        except (json.JSONDecodeError, AttributeError) as e:
-            print(f"⚠️ Erreur parsing JSON génération: {e}")
-
-        return generate_default_subjects(params, count)
-
-    except Exception as e:
-        print(f"⚠️ Erreur génération LangChain: {e}")
-        return generate_default_subjects(params, count)
-
-# ======================
-# CONSEILS GÉNÉRAUX
-# ======================
-
-def get_tips() -> Dict[str, List[str]]:
-    """
-    Retourne des conseils pour la rédaction de mémoire
-    """
-    return {
-        "choix_sujet": [
-            "Choisissez un sujet qui vous passionne vraiment",
-            "Assurez-vous que le sujet soit ni trop large ni trop étroit",
-            "Vérifiez la disponibilité des ressources",
-            "Le sujet doit apporter une contribution originale",
-            "Consultez votre directeur potentiel avant de finaliser",
-        ],
-        "methodologie": [
-            "Définissez clairement votre problématique de recherche",
-            "Choisissez une méthodologie adaptée à votre question",
-            "Élaborez un plan de recherche détaillé",
-            "Documentez rigoureusement toutes vos sources",
-            "Testez votre méthodologie sur un échantillon réduit",
-        ],
-        "redaction": [
-            "Structurez votre mémoire de manière logique",
-            "Rédigez régulièrement (un peu chaque jour)",
-            "Utilisez un style académique clair et précis",
-            "Citez vos sources selon les normes",
-            "Faites relire votre travail par d'autres",
-        ],
-        "soutenance": [
-            "Préparez votre présentation bien à l'avance",
-            "Structurez votre présentation clairement",
-            "Entraînez-vous plusieurs fois à présenter",
-            "Préparez un support visuel professionnel",
-            "Anticipez les questions du jury",
-        ],
-    }
-
-# ======================
-# TEST LOCAL
-# ======================
-
-if __name__ == "__main__":
-    print("🧪 Test de LangChain avec Gemini...")
-
-    if llm:
-        try:
-            prompt = ChatPromptTemplate.from_template("Réponds simplement 'OK' si tu fonctionnes.")
-            chain = prompt | llm | StrOutputParser()
-            response = chain.invoke({})
-            print(f"✅ LangChain fonctionne: {response}")
-        except Exception as e:
-            print(f"❌ Erreur test LangChain: {e}")
-    else:
-        print("⚠️ LangChain non configuré, mode fallback activé")
-
-    print("\n✅ Module llm_service prêt")
+__all__ = [
+    'llm',
+    'load_sujets_csv',
+    'build_sujets_vectorstore',  
+    'search_sujets_context',      
+    'analyser_conversation_expert',
+    'repondre_comme_expert',
+    'repondre_sans_llm',
+    'recommander_sujets_llm',
+    'générer_sujets_llm',
+    'analyser_sujet',
+    'get_acceptance_criteria',
+    'get_tips'
+]

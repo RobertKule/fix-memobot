@@ -316,12 +316,7 @@ export default function LoginPage() {
             transition={{ delay: 0.2 }}
             className="mt-8 space-y-6"
           >
-            <div className="inline-flex items-center gap-3 px-5 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-full mx-auto">
-              <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                Déjà 5K+ étudiants nous font confiance
-              </span>
-            </div>
+
 
             <div className="text-center">
               <p className="text-xs text-gray-500 dark:text-gray-400">

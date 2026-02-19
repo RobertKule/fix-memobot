@@ -662,6 +662,7 @@ export default function AdminDashboardPage() {
   const [sujetFilter, setSujetFilter] = useState<'all' | 'active' | 'inactive' | 'popular' | 'recent'>('all')
   const [showFilters, setShowFilters] = useState(false)
 
+  
   // Données
   const [stats, setStats] = useState<AdminStats>({
     totalUsers: 0,
@@ -691,9 +692,23 @@ export default function AdminDashboardPage() {
   // Sélections
   const [selectedUsers, setSelectedUsers] = useState<number[]>([])
   const [selectedSujets, setSelectedSujets] = useState<number[]>([])
-
-  // Modal de création de sujet
+    // Modal de création de sujet
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [newSujet, setNewSujet] = useState<NewSujetForm>({
+    titre: '',
+    description: '',
+    keywords: '',
+    domaine: '',
+    niveau: '',
+    faculté: '',
+    problématique: '',
+    méthodologie: '',
+    technologies: '',
+    difficulté: 'moyenne',
+    durée_estimée: '',
+    ressources: ''
+  })
 
   // Modal
   interface ConfirmModalData {
@@ -904,8 +919,8 @@ const fetchDashboardData = useCallback(async (showToast = false) => {
       },
       {
         id: 2,
-        email: 'jean.dupont@universite.fr',
-        full_name: 'Jean Dupont',
+        email: 'Happy.Furaha@universite.fr',
+        full_name: 'Happy Furaha',
         role: 'enseignant',
         is_active: true,
         created_at: new Date().toISOString()
@@ -1096,6 +1111,7 @@ const fetchDashboardData = useCallback(async (showToast = false) => {
   }
 
   // Création de sujet
+    // Création de sujet
   const handleCreateSujet = async () => {
     // Validation
     if (!newSujet.titre.trim()) {
@@ -1183,7 +1199,7 @@ const fetchDashboardData = useCallback(async (showToast = false) => {
       setCreateLoading(false)
     }
   }
-
+  
   // Export avec toast
   const handleExport = async (type: 'users' | 'sujets') => {
     const toastId = toast.loading(`Préparation de l'export ${type}...`)

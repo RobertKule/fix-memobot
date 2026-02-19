@@ -277,7 +277,7 @@ export default function RegisterPage() {
                           onChange={handleChange}
                           disabled={isLoading}
                           className="pl-10 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                          placeholder="Jean Dupont"
+                          placeholder="Happy Furaha"
                         />
                       </div>
                     </div>
@@ -299,7 +299,7 @@ export default function RegisterPage() {
                           onChange={handleChange}
                           disabled={isLoading}
                           className="pl-10 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                          placeholder="jean.dupont@universite.ac"
+                          placeholder="Happy.Furaha@universite.ac"
                         />
                       </div>
                     </div>

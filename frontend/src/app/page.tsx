@@ -381,7 +381,7 @@ export default function HomePage() {
                 Votre parcours <span className="text-blue-600 dark:text-blue-400">pas à pas</span>
               </h2>
               <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                Un accompagnement humain à chaque étape de votre recherche
+                Un accompagnement ouvert à chaque étape de votre recherche
               </p>
             </motion.div>
 
@@ -572,7 +572,7 @@ export default function HomePage() {
               transition={{ delay: 0.4 }}
               className="text-xl text-blue-100 mb-10 max-w-2xl mx-auto"
             >
-              Rejoignez une communauté d&apos;étudiants qui ont trouvé leur voie grâce à un accompagnement humain et personnalisé.
+              Rejoignez une communauté d&apos;étudiants qui ont trouvé leur voie grâce à un accompagnement libre et personnalisé.
             </motion.p>
 
             <motion.div
@@ -618,7 +618,7 @@ export default function HomePage() {
               transition={{ delay: 0.6 }}
               className="mt-8 text-blue-200 text-sm"
             >
-              Un accompagnement humain • Gratuit • Sans engagement
+              Un accompagnement libre • Gratuit • Sans engagement
             </motion.p>
           </motion.div>
         </div>
@@ -626,7 +626,7 @@ export default function HomePage() {
 
       <Footer />
 
-      <QuickChat />
+      <QuickChat /> 
 
       {mounted && (
         <motion.div

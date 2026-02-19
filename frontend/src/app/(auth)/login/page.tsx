@@ -153,7 +153,7 @@ export default function LoginPage() {
               </motion.div>
               <div className="text-left">
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">MemoBot</div>
-                <div className="text-sm text-blue-600 dark:text-blue-400">Tableau de bord</div>
+                <div className="text-sm text-blue-600 dark:text-blue-400">Retour à l'Accueil</div>
               </div>
             </Link>
 

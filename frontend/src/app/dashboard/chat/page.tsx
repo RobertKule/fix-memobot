@@ -1,130 +1,207 @@
-// src/app/dashboard/chat/page.tsx
+// src/app/dashboard/chat/page.tsx - Version avec génération automatique
 'use client'
-
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import React,{ useState, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import {
   Bot,
   User,
   Send,
   RefreshCw,
   Copy,
-  MessageSquare,
   BookOpen,
   Sparkles,
-  TrendingUp,
-  Clock,
-  HelpCircle,
-  Lightbulb,
-  Zap,
-  Loader2,
   Eye,
   ChevronRight,
   ChevronLeft,
   ChevronDown,
-  ThumbsUp,
-  ThumbsDown
+  StopCircle,
+  AlertCircle,
+  Brain,
+  GraduationCap,
+  Code,
+  FileText
 } from 'lucide-react'
 import Link from 'next/link'
-import { api, Sujet, AIResponse } from '@/lib/api'
+import { api, Sujet } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
 interface Message {
-  id: number
+  id: string
   sender: 'user' | 'bot'
   content: string
   time: string
+  isError?: boolean
+  suggestions?: string[]
+  peutGenerer?: boolean
+}
+
+interface GeneratedSubject {
+  id?: number
+  titre: string
+  description: string
+  keywords: string
+  domaine: string
+  niveau: string
+  problématique: string
+  méthodologie: string
+  difficulté: string
+  durée_estimée: string
 }
 
 export default function ChatPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const topicParam = searchParams?.get('topic')
 
   const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState<string>('')
+  const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [popularTopics, setPopularTopics] = useState<Sujet[]>([])
   const [isTyping, setIsTyping] = useState(false)
+  const [popularTopics, setPopularTopics] = useState<Sujet[]>([])
   const [showSidebar, setShowSidebar] = useState(true)
   const [showQuickActions, setShowQuickActions] = useState(true)
+  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generatedSubjects, setGeneratedSubjects] = useState<GeneratedSubject[]>([])
+  const [abortController, setAbortController] = useState<AbortController | null>(null)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
   function getCurrentTime() {
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
-  const isInputEmpty = !input || !input.trim()
-  const scrollToBottom = useCallback(() => {
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, isTyping])
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      initializeConversation()
+    }
+    loadPopularTopics()
+    inputRef.current?.focus()
+  }, [])
+
+  const scrollToBottom = () => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, 100)
-  }, [])
+  }
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, scrollToBottom])
-
-  useEffect(() => {
-    // Initialiser les messages avec ou sans topic
-    if (topicParam) {
-      const decodedTopic = decodeURIComponent(topicParam)
-      setMessages([
-        {
-          id: 1,
+  const initializeConversation = async () => {
+    try {
+      if (!user || !user.id) {
+        setMessages([{
+          id: generateId(),
           sender: 'bot',
-          content: `👋 Bonjour ${user?.full_name || ''} ! Je vois que vous voulez discuter du sujet :\n\n**${decodedTopic}**\n\nJe suis MemoBot, votre assistant IA spécialisé pour vous aider à trouver le sujet de mémoire idéal.\n\nJe peux vous aider à analyser ce sujet, suggérer des améliorations, ou vous proposer des sujets similaires.\n\nQue souhaitez-vous savoir sur ce sujet ?`,
+          content: "👋 Bonjour ! Je suis MemoBot, votre assistant pour trouver le sujet de mémoire idéal.\n\nParlez-moi de votre projet :\n• Quel est votre domaine d'étude ?\n• Quels sont vos centres d'intérêt ?\n• Avez-vous des idées de sujet ?",
           time: getCurrentTime()
-        }
-      ])
-      setInput(`Parle-moi du sujet : ${decodedTopic}`)
-    } else {
-      setMessages([
-        {
-          id: 1,
-          sender: 'bot',
-          content: `👋 Bonjour ${user?.full_name || ''} ! Je suis MemoBot, votre assistant IA spécialisé pour vous aider à trouver le sujet de mémoire idéal.\n\nJe peux vous aider à :\n• Générer des idées de sujets personnalisés\n• Analyser et évaluer vos propositions  \n• Vous guider sur la méthodologie\n• Répondre à toutes vos questions\n\nDe quoi avez-vous besoin aujourd'hui ?`,
-          time: getCurrentTime()
-        }
-      ])
-      setInput('') // Assurez-vous que input est initialisé même sans topicParam
-    }
+        }])
+        return
+      }
 
-    loadPopularTopics()
-    inputRef.current?.focus()
-  }, [topicParam, user?.full_name])
+      // Récupérer le profil
+      let profile
+      try {
+        profile = await api.getUserProfile(user.id)
+      } catch (error) {
+        console.log("⚠️ Erreur profil:", error)
+      }
 
-  // Auto-scroll quand les messages changent
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+      // Récupérer les compétences
+      let skills: any[] = []
+      try {
+        skills = await api.getUserSkills(user.id)
+      } catch (error) {
+        console.log("⚠️ Erreur compétences:", error)
+      }
+
+      const name = user?.full_name ? user.full_name.split(' ')[0] : 'Cher utilisateur'
+      
+      let welcomeText = `👋 Bonjour ${name} ! `
+
+      if (profile?.level || profile?.field) {
+        welcomeText += `Je vois votre profil `
+        if (profile.level) welcomeText += `en ${profile.level}`
+        if (profile.field) welcomeText += profile.level ? ` en ${profile.field}` : `dans le domaine ${profile.field}`
+        welcomeText += `.\n\n`
+      } else {
+        welcomeText += `\n\n`
+      }
+
+      if (profile?.interests) {
+        const interests = profile.interests.split(',').map(i => i.trim()).slice(0, 3)
+        if (interests.length > 0) {
+          welcomeText += `Vous êtes intéressé par ${interests.join(', ')}. `
+        }
+      }
+
+      if (skills.length > 0) {
+        const topSkill = skills.sort((a, b) => b.level - a.level)[0]
+        welcomeText += `Je vois que vous maîtrisez ${topSkill.name}. `
+      }
+
+      welcomeText += `\n\nJe suis là pour vous aider à trouver **le sujet de mémoire parfait**.\n\n`
+      welcomeText += `Parlez-moi de votre projet :\n`
+      welcomeText += `• Qu'est-ce qui vous inspire ?\n`
+      welcomeText += `• Des idées en tête ?\n`
+      welcomeText += `• Des technologies qui vous intéressent ?`
+
+      setMessages([{
+        id: generateId(),
+        sender: 'bot',
+        content: welcomeText,
+        time: getCurrentTime()
+      }])
+
+    } catch (error) {
+      console.error("❌ Erreur initialisation:", error)
+      setMessages([{
+        id: generateId(),
+        sender: 'bot',
+        content: "👋 Bonjour ! Je suis MemoBot, votre assistant pour trouver le sujet de mémoire idéal.\n\nParlez-moi de votre projet.",
+        time: getCurrentTime()
+      }])
     }
-  }, [messages, isTyping])
+  }
 
   const loadPopularTopics = async () => {
     try {
       const topics = await api.getPopularSujets(3)
       setPopularTopics(topics || [])
     } catch (error) {
-      console.error('Erreur chargement sujets populaires:', error)
+      console.error('Erreur chargement sujets:', error)
+    }
+  }
+
+  const handleStopGeneration = () => {
+    if (abortController) {
+      abortController.abort()
+      setAbortController(null)
+      setIsLoading(false)
+      setIsTyping(false)
+      setIsGenerating(false)
+      toast.info('Génération arrêtée')
     }
   }
 
   const handleSend = async () => {
-    if (!input || isLoading) return
+    if (!input.trim() || isLoading) return
 
     const trimmedInput = input.trim()
-    if (!trimmedInput) {
-      setInput('') // Réinitialiser si c'est juste des espaces
-      return
-    }
+    const controller = new AbortController()
+    setAbortController(controller)
 
-    // Ajouter le message de l'utilisateur
+    // Ajouter message utilisateur
     const userMessage: Message = {
-      id: Date.now(),
+      id: generateId(),
       sender: 'user',
       content: trimmedInput,
       time: getCurrentTime()
@@ -136,35 +213,149 @@ export default function ChatPage() {
     setIsTyping(true)
 
     try {
-      const response: AIResponse = await api.askAI(trimmedInput)
-
-      setTimeout(() => {
-        const botMessage: Message = {
-          id: Date.now() + 1,
+      // Vérifier si c'est trop court
+      if (trimmedInput.length < 15) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        setIsTyping(false)
+        
+        const response: Message = {
+          id: generateId(),
           sender: 'bot',
-          content: response.message || "Je n'ai pas pu générer de message pour le moment.",
+          content: "Votre message est un peu court. Pourriez-vous me donner plus de détails sur votre projet ou vos centres d'intérêt ?",
           time: getCurrentTime()
         }
-
-        setMessages(prev => [...prev, botMessage])
+        setMessages(prev => [...prev, response])
         setIsLoading(false)
-        setIsTyping(false)
-      }, 800)
-
-    } catch (error) {
-      console.error('Erreur API:', error)
-
-      const errorMessage: Message = {
-        id: Date.now() + 1,
-        sender: 'bot',
-        content: "Désolé, je rencontre une difficulté technique. Pourriez-vous reformuler votre question ?",
-        time: getCurrentTime()
+        setAbortController(null)
+        return
       }
 
-      setMessages(prev => [...prev, errorMessage])
-      setIsLoading(false)
+      // Construire l'historique
+      const conversationHistory = messages
+        .map(m => `${m.sender === 'user' ? 'Utilisateur' : 'Assistant'}: ${m.content}`)
+        .join('\n')
+
+      // Appel API
+      const response = await api.askAI(trimmedInput, conversationHistory)
+
+      if (controller.signal.aborted) {
+        setAbortController(null)
+        return
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 800))
       setIsTyping(false)
+
+      const botMessage: Message = {
+        id: generateId(),
+        sender: 'bot',
+        content: response.message || "Je n'ai pas pu générer de réponse.",
+        time: getCurrentTime(),
+        suggestions: response.suggestions,
+        peutGenerer: response.peut_generer
+      }
+
+      setMessages(prev => [...prev, botMessage])
+
+      // Si l'IA dit qu'on peut générer, afficher le modal après 1 seconde
+      if (response.peut_generer) {
+        setTimeout(() => {
+          setShowGenerateModal(true)
+        }, 1000)
+      }
+
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('Requête annulée')
+      } else {
+        console.error('Erreur:', error)
+        const errorMessage: Message = {
+          id: generateId(),
+          sender: 'bot',
+          content: "Désolé, je rencontre une difficulté technique. Pouvez-vous reformuler ?",
+          time: getCurrentTime(),
+          isError: true
+        }
+        setMessages(prev => [...prev, errorMessage])
+        setIsTyping(false)
+      }
+    } finally {
+      setIsLoading(false)
+      setAbortController(null)
     }
+  }
+
+  const handleGenerateSubjects = async () => {
+    if (!user) {
+      toast.error('Veuillez vous connecter')
+      return
+    }
+
+    setIsGenerating(true)
+    setShowGenerateModal(false)
+
+    const waitingMessage: Message = {
+      id: generateId(),
+      sender: 'bot',
+      content: "🔄 J'analyse notre conversation pour générer 3 sujets de mémoire personnalisés...\n\nCela prendra quelques secondes.",
+      time: getCurrentTime()
+    }
+    setMessages(prev => [...prev, waitingMessage])
+
+    try {
+      // Extraire les intérêts de la conversation
+      const userMessages = messages
+        .filter(m => m.sender === 'user')
+        .map(m => m.content)
+        .join(' ')
+
+      // Récupérer les préférences
+      const prefs = await api.getPreferences()
+
+      // Générer 3 sujets
+      const result = await api.generateThreeSubjects({
+        interests: userMessages.split(' ').filter(w => w.length > 3).slice(0, 10),
+        domaine: prefs?.field || 'Informatique',
+        niveau: prefs?.level || 'Master',
+        faculté: prefs?.faculty || 'Sciences'
+      })
+
+      setGeneratedSubjects(result.subjects)
+
+      // Message de succès
+      const successMessage: Message = {
+        id: generateId(),
+        sender: 'bot',
+        content: `✅ J'ai généré 3 sujets pour vous !\n\n**1. ${result.subjects[0].titre}**\n${result.subjects[0].description.substring(0, 100)}...\n\n**2. ${result.subjects[1].titre}**\n${result.subjects[1].description.substring(0, 100)}...\n\n**3. ${result.subjects[2].titre}**\n${result.subjects[2].description.substring(0, 100)}...\n\nLes détails complets sont disponibles ci-dessous.`,
+        time: getCurrentTime()
+      }
+      setMessages(prev => [...prev, successMessage])
+
+    } catch (error) {
+      console.error('Erreur génération:', error)
+      const errorMessage: Message = {
+        id: generateId(),
+        sender: 'bot',
+        content: "Désolé, je n'ai pas pu générer de sujets. Continuons notre discussion !",
+        time: getCurrentTime(),
+        isError: true
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleSelectSubject = (index: number) => {
+    const subject = generatedSubjects[index]
+    if (!subject) return
+
+    // Sauvegarder dans localStorage
+    localStorage.setItem('selected_subject', JSON.stringify(subject))
+    
+    // Rediriger vers la page de détails
+    router.push('/dashboard/recommendations')
+    toast.success('Sujet sélectionné')
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -174,71 +365,23 @@ export default function ChatPage() {
     }
   }
 
-  const handleQuickAction = (action: string) => {
-    const actions: Record<string, string> = {
-      "Générer des sujets": "Génère-moi des sujets de mémoire",
-      "Analyser un sujet": "Analyse ce sujet pour moi",
-      "Critères d'acceptation": "Quels sont les critères d'un bon sujet ?",
-      "Conseils méthodologie": "Donne-moi des conseils méthodologiques",
-      "Rechercher des références": "Trouve-moi des références bibliographiques"
-    }
-
-    setInput(actions[action])
-    inputRef.current?.focus()
-  }
-
-  const handleCopyMessage = (content: string) => {
-    navigator.clipboard.writeText(content)
-    toast.success('Message copié')
-  }
-
-  const handleLikeMessage = (messageId: number) => {
-    toast.success('Feedback envoyé')
-  }
-
-  const handleDislikeMessage = (messageId: number) => {
-    toast.info('Feedback envoyé')
-  }
-
-  const handleAnalyzeTopic = async (topicTitle: string) => {
-    setInput(`Analyse ce sujet : "${topicTitle}"`)
-    setTimeout(() => handleSend(), 100)
-  }
-
-  const handleGenerateSimilarTopics = async () => {
-    if (topicParam) {
-      const decodedTopic = decodeURIComponent(topicParam)
-      setInput(`Génère-moi des sujets similaires à : "${decodedTopic}"`)
-      setTimeout(() => handleSend(), 100)
-    }
-  }
-
-  const quickActions = topicParam ? [
-    "Analyser ce sujet",
-    "Critères d'évaluation",
-    "Sujets similaires",
-    "Méthodologie recommandée",
-    "Références bibliographiques"
-  ] : [
-    "Générer des sujets",
-    "Analyser un sujet",
-    "Critères d'acceptation",
-    "Conseils méthodologie",
-    "Rechercher des références"
+  const quickActions = [
+    "Parle-moi de mon domaine",
+    "Quels sujets me correspondent ?",
+    "Explique-moi la méthodologie",
+    "Donne-moi des exemples"
   ]
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 flex">
-
       {/* Chat principal */}
       <div className={`flex-1 flex flex-col transition-all duration-300 ${showSidebar ? 'lg:w-3/4' : 'w-full'}`}>
-
         {/* Header */}
         <header className="sticky top-16 z-10 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
           <div className="px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-full flex items-center justify-center">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                   <Bot className="w-4 h-4 text-white" />
                 </div>
                 <div>
@@ -246,32 +389,26 @@ export default function ChatPage() {
                     MemoBot Assistant
                   </h1>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {topicParam ? 'Analyse de sujet' : 'Spécialiste en sujets de mémoire'}
+                    {messages.length} messages • Contexte préservé
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                {topicParam && (
-                  <button
-                    onClick={handleGenerateSimilarTopics}
-                    disabled={isLoading}
-                    className="px-3 py-1.5 text-sm bg-gradient-to-r from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Sujets similaires
-                  </button>
-                )}
                 <button
-                  onClick={loadPopularTopics}
-                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                  title="Actualiser"
+                  onClick={() => {
+                    setMessages([])
+                    initializeConversation()
+                    toast.success('Nouvelle conversation')
+                  }}
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  title="Nouvelle conversation"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setShowSidebar(!showSidebar)}
-                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors lg:hidden"
-                  title={showSidebar ? "Masquer la sidebar" : "Afficher la sidebar"}
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors lg:hidden"
                 >
                   {showSidebar ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
                 </button>
@@ -292,108 +429,69 @@ export default function ChatPage() {
                 className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div className={`max-w-[85%] ${msg.sender === 'user' ? 'ml-auto' : ''}`}>
-                  <div className={`rounded-2xl p-4 ${msg.sender === 'user'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
+                  <div className={`rounded-2xl p-4 ${
+                    msg.sender === 'user'
+                      ? 'bg-blue-500 text-white'
+                      : msg.isError
+                      ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                      : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
                     } ${msg.sender === 'user' ? 'rounded-br-none' : 'rounded-bl-none'}`}>
 
-                    {/* Header du message */}
+                    {/* Header */}
                     <div className="flex items-center gap-2 mb-3">
                       {msg.sender === 'bot' ? (
                         <>
-                          <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-full flex items-center justify-center flex-shrink-0">
+                          <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                             <Bot className="w-3 h-3 text-white" />
                           </div>
                           <span className="text-sm font-medium text-gray-900 dark:text-white">MemoBot</span>
                         </>
                       ) : (
                         <>
-                          <span className="text-sm font-medium text-white/90">{user?.full_name}</span>
-                          <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-sm font-medium text-white/90">{user?.full_name?.split(' ')[0]}</span>
+                          <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
                             <User className="w-3 h-3 text-white" />
                           </div>
                         </>
                       )}
-
-                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">
-                        {msg.time}
-                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">{msg.time}</span>
                     </div>
 
-                    {/* Contenu du message */}
-                    <div className="space-y-2">
-                      {msg.content.split('\n').map((line, i) => {
-                        if (line.trim() === '') return <br key={i} />
+{/* Affichage des messages sans trop de formatage */}
+<div className="whitespace-pre-wrap text-sm">
+  {msg.content}
+</div>
 
-                        if (line.startsWith('• ') || line.startsWith('- ')) {
-                          return (
-                            <div key={i} className="flex items-start">
-                              <span className={`mr-2 mt-1 ${msg.sender === 'user' ? 'text-blue-200' : 'text-blue-500'}`}>•</span>
-                              <span className={msg.sender === 'user' ? 'text-white/90' : 'text-gray-700 dark:text-gray-300'}>
-                                {line.substring(2)}
-                              </span>
-                            </div>
-                          )
-                        }
+{/* Supprimer les suggestions automatiques trop nombreuses */}
+{msg.suggestions && msg.suggestions.length > 0 && (
+  <div className="mt-3 pt-3 border-t border-gray-200">
+    <p className="text-xs text-gray-500 mb-2">Suggestions :</p>
+    <div className="flex flex-wrap gap-2">
+      {msg.suggestions.slice(0, 1).map((suggestion, i) => (
+        <button
+          key={i}
+          onClick={() => setInput(suggestion)}
+          className="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+        >
+          {suggestion}
+        </button>
+      ))}
+    </div>
+  </div>
+)}
 
-                        if (line.includes('**') && line.includes('**')) {
-                          const parts = line.split('**')
-                          return (
-                            <div key={i}>
-                              <strong className={msg.sender === 'user' ? 'text-white' : 'text-gray-900 dark:text-white'}>
-                                {parts[1]}
-                              </strong>
-                              <span className={msg.sender === 'user' ? 'text-white/90' : 'text-gray-700 dark:text-gray-300'}>
-                                {parts[2]}
-                              </span>
-                            </div>
-                          )
-                        }
-
-                        return (
-                          <p key={i} className={msg.sender === 'user' ? 'text-white/90' : 'text-gray-700 dark:text-gray-300'}>
-                            {line}
-                          </p>
-                        )
-                      })}
-                    </div>
-
-                    {/* Actions du message */}
-                    <div className="mt-4 flex items-center gap-2">
-                      {msg.sender === 'bot' ? (
-                        <>
-                          <button
-                            onClick={() => handleCopyMessage(msg.content)}
-                            className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                            title="Copier"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleLikeMessage(msg.id)}
-                            className="p-1.5 text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                            title="J'aime"
-                          >
-                            <ThumbsUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDislikeMessage(msg.id)}
-                            className="p-1.5 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                            title="Je n'aime pas"
-                          >
-                            <ThumbsDown className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      ) : (
+                    {/* Bouton de génération */}
+                    {msg.peutGenerer && (
+                      <div className="mt-3">
                         <button
-                          onClick={() => handleCopyMessage(msg.content)}
-                          className="p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                          title="Copier"
+                          onClick={() => setShowGenerateModal(true)}
+                          className="w-full px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm rounded-lg hover:from-green-600 hover:to-green-700 transition-all flex items-center justify-center gap-2"
                         >
-                          <Copy className="w-3.5 h-3.5" />
+                          <Sparkles className="w-4 h-4" />
+                          Générer 3 sujets de mémoire
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -405,7 +503,7 @@ export default function ChatPage() {
                 <div className="max-w-[85%]">
                   <div className="rounded-2xl p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-bl-none">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-full flex items-center justify-center">
+                      <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                         <Bot className="w-3 h-3 text-white" />
                       </div>
                       <span className="text-sm font-medium text-gray-900 dark:text-white">MemoBot</span>
@@ -424,261 +522,197 @@ export default function ChatPage() {
           </div>
         </main>
 
-        {/* Suggestions rapides */}
-        <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-          <div className="max-w-3xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowQuickActions(!showQuickActions)}
-                  className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                  title={showQuickActions ? "Réduire les suggestions" : "Afficher les suggestions"}
-                >
-                  {showQuickActions ? (
-                    <ChevronDown className="w-4 h-4" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4" />
-                  )}
-                </button>
-                <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">
-                  Suggestions rapides
-                </span>
-              </div>
-              <span className="text-xs text-gray-400 dark:text-gray-500">
-                {showQuickActions ? `${quickActions.length} actions` : "Cliquez pour développer"}
-              </span>
-            </div>
-
-            {showQuickActions && (
-              <div className="mt-2 flex flex-wrap gap-2 animate-in fade-in duration-200">
-                {quickActions.map((action) => (
-                  <button
-                    key={action}
-                    onClick={() => handleQuickAction(action)}
-                    disabled={isLoading}
-                    className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 hover:border-blue-300 dark:hover:border-blue-600 border border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {action}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Zone de saisie */}
-        <div className="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+        <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
           <div className="max-w-3xl mx-auto px-4 py-4">
-            <div className="relative flex items-end gap-2 w-full">
-              {/* Textarea avec padding pour le bouton */}
+            <div className="relative flex items-end gap-2">
               <div className="flex-1 relative">
                 <textarea
                   ref={inputRef}
-                  value={input || ''}
-                  onChange={(e) => setInput(e.target.value || '')}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyPress}
-                  placeholder={topicParam ? "Posez votre question sur ce sujet..." : "Posez votre question à MemoBot..."}
-                  className="w-full px-4 py-3 pr-16 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none min-h-[60px] text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  placeholder="Parlez-moi de votre projet..."
+                  className="w-full px-4 py-3 pr-16 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white placeholder-gray-500 resize-none min-h-[60px] text-sm"
                   rows={2}
                   disabled={isLoading}
                 />
 
-                {/* Bouton dans la zone de texte */}
-
-                <button
-                  onClick={handleSend}
-                  disabled={isInputEmpty || isLoading}
-                  className="absolute right-2 bottom-2 p-2 bg-gradient-to-r from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 text-white rounded-full hover:from-blue-600 hover:to-blue-700 dark:hover:from-blue-700 dark:hover:to-blue-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                  style={{ width: '36px', height: '36px' }}
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
+                {isLoading ? (
+                  <button
+                    onClick={handleStopGeneration}
+                    className="absolute right-2 bottom-2 p-2 bg-red-600 hover:bg-red-700 text-white rounded-full"
+                    title="Arrêter"
+                  >
+                    <StopCircle className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim()}
+                    className="absolute right-2 bottom-2 p-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"
+                  >
                     <Send className="w-4 h-4" />
-                  )}
-                </button>
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Info ligne */}
-            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex justify-between text-center">
+            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex justify-between">
               <span>Shift+Entrée pour nouvelle ligne • Entrée pour envoyer</span>
-              <span>{(input || '').length}/2000</span>
+              {input.length > 0 && input.length < 15 && (
+                <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Message court
+                </span>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Sidebar - Réduisible */}
+      {/* Sidebar */}
       {showSidebar && (
-        <div className="hidden sticky top-2 lg:block w-1/4 h-screen border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-y-auto">
+        <div className="hidden lg:block w-1/4 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-y-auto sticky top-16 h-[calc(100vh-4rem)]">
           <div className="p-4">
-
-            {/* Bouton pour réduire */}
-            <div className="flex justify-end mb-4">
-              <button
-                onClick={() => setShowSidebar(false)}
-                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                title="Réduire la sidebar"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+            {/* Info session */}
+            <div className="mb-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <Brain className="w-4 h-4 text-blue-600" />
+                Session en cours
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Messages</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{messages.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Vos messages</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {messages.filter(m => m.sender === 'user').length}
+                  </span>
+                </div>
+              </div>
+              {messages.filter(m => m.sender === 'user').length >= 3 && (
+                <button
+                  onClick={() => setShowGenerateModal(true)}
+                  disabled={isGenerating}
+                  className="mt-4 w-full px-3 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Générer des sujets
+                </button>
+              )}
             </div>
 
             {/* Sujets populaires */}
             <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Sujets populaires</h3>
-                <Link
-                  href="/dashboard/sujets"
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  Voir tous
-                </Link>
-              </div>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Sujets populaires</h3>
               <div className="space-y-3">
-                {popularTopics.length > 0 ? (
-                  popularTopics.map((topic) => (
-                    <div
-                      key={topic.id}
-                      className="block p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors group cursor-pointer"
-                      onClick={() => handleAnalyzeTopic(topic.titre)}
-                    >
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                        {topic.titre}
-                      </h4>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
-                          {topic.domaine}
-                        </span>
-                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                          <Eye className="w-3 h-3" />
-                          <span>{topic.vue_count || 0}</span>
-                        </div>
+                {popularTopics.map((topic) => (
+                  <div
+                    key={topic.id}
+                    onClick={() => setInput(`Parle-moi du sujet : ${topic.titre}`)}
+                    className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 cursor-pointer transition-colors"
+                  >
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 mb-1">
+                      {topic.titre}
+                    </h4>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+                        {topic.domaine}
+                      </span>
+                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                        <Eye className="w-3 h-3" />
+                        {topic.vue_count || 0}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-6">
-                    <div className="text-gray-300 dark:text-gray-600 mb-2">
-                      <BookOpen className="w-8 h-8 mx-auto" />
-                    </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Chargement...</p>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Statistiques */}
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Votre session</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Messages</span>
-                  </div>
-                  <span className="font-medium text-gray-900 dark:text-white">{messages.length}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4 text-green-500" />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Sujets suggérés</span>
-                  </div>
-                  <span className="font-medium text-gray-900 dark:text-white">{popularTopics.length}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Durée active</span>
-                  </div>
-                  <span className="font-medium text-gray-900 dark:text-white">0 min</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Conseils */}
-            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-800/30">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-blue-100 dark:bg-blue-800 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <HelpCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Conseil</h4>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {topicParam
-                      ? "Demandez une analyse détaillée, des améliorations ou des sujets similaires."
-                      : "Soyez précis : mentionnez votre domaine et vos centres d'intérêt pour des suggestions pertinentes."}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Fonctionnalités IA */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-                {topicParam ? 'Analyse IA' : 'Fonctionnalités IA'}
-              </h3>
-              <div className="space-y-2">
-                {topicParam ? (
-                  <>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg flex items-center justify-center">
-                        <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">Analyse détaillée</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Points forts et faibles</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="w-8 h-8 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-lg flex items-center justify-center">
-                        <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">Sujets similaires</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Variations et alternatives</p>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg flex items-center justify-center">
-                        <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">Génération de sujets</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Personnalisés selon vos intérêts</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="w-8 h-8 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-lg flex items-center justify-center">
-                        <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">Analyse de sujets</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Évaluation et critique constructive</p>
-                      </div>
-                    </div>
-                  </>
-                )}
+                ))}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Bouton pour afficher la sidebar quand elle est cachée */}
-      {!showSidebar && (
-        <div className="hidden lg:flex items-center border-l border-gray-200 dark:border-gray-700">
-          <button
-            onClick={() => setShowSidebar(true)}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-            title="Afficher la sidebar"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+      {/* Modal de génération */}
+      {showGenerateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-blue-600" />
+                  Sujets de mémoire générés
+                </h2>
+                <button
+                  onClick={() => setShowGenerateModal(false)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+                >
+                  <ChevronDown className="w-5 h-5" />
+                </button>
+              </div>
+
+              {isGenerating ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-gray-600 dark:text-gray-400">Génération des sujets...</p>
+                </div>
+              ) : generatedSubjects.length > 0 ? (
+                <div className="space-y-4">
+                  {generatedSubjects.map((subject, index) => (
+                    <div
+                      key={index}
+                      className="p-6 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-300 transition-colors"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                            {subject.titre}
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            {subject.description}
+                          </p>
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {subject.keywords.split(',').slice(0, 3).map((kw, i) => (
+                              <span key={i} className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-xs rounded">
+                                {kw.trim()}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                            <span>{subject.domaine}</span>
+                            <span>•</span>
+                            <span>{subject.niveau}</span>
+                            <span>•</span>
+                            <span className="capitalize">{subject.difficulté}</span>
+                          </div>
+                          <button
+                            onClick={() => handleSelectSubject(index)}
+                            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                          >
+                            Choisir ce sujet
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <button
+                    onClick={handleGenerateSubjects}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800"
+                  >
+                    Générer 3 sujets maintenant
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

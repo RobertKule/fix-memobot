@@ -1,88 +1,172 @@
 // src/app/dashboard/page.tsx
 'use client'
 
-import { Target, Star, MessageSquare, TrendingUp, FileText, ArrowRight, Eye, GraduationCap } from 'lucide-react'
+import { Target, Star, MessageSquare, TrendingUp, FileText, ArrowRight, Eye, GraduationCap, BookOpen, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { AlertCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { api, Sujet, UserPreference } from '@/lib/api'
+import { api, Sujet, UserPreference, RecommendedSujet } from '@/lib/api'
 import { useAuthGuard } from '@/hooks/useAuthGuard'
+
+// Types pour les données du dashboard
+interface DashboardStats {
+  total_sujets: number
+  user_sujets: number
+  saved_sujets: number
+  recommendations_count: number
+  last_activity: string
+  popular_keywords: Array<{ keyword: string; count: number }>
+  domain_stats: Array<{ domaine: string; count: number; avg_views: number }>
+}
+
+// Skeleton component
+const DashboardSkeleton = () => (
+  <div className="space-y-6">
+    {/* En-tête skeleton */}
+    <div className="animate-pulse">
+      <div className="h-8 w-64 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+      <div className="h-4 w-96 bg-gray-200 dark:bg-gray-700 rounded"></div>
+    </div>
+
+    {/* Stats skeleton */}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <div className="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+            <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Profil et Actions skeleton */}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Profil skeleton */}
+      <div className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="h-6 w-40 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
+        <div className="space-y-3">
+          <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="h-4 w-1/2 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+      </div>
+
+      {/* Actions skeleton */}
+      <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-gray-200 dark:bg-gray-600 rounded-lg"></div>
+                <div className="space-y-2">
+                  <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                  <div className="h-3 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* Sujets populaires skeleton */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+              <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+              <div className="h-3 w-1/2 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Progression skeleton */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i}>
+              <div className="flex justify-between mb-1">
+                <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                <div className="h-3 w-8 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              </div>
+              <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+)
 
 export default function DashboardPage() {
   useAuthGuard(true)
   const { user } = useAuth()
-  const [stats, setStats] = useState([
-    { label: 'Sujets', value: '0', icon: Target, color: 'text-blue-600' },
-    { label: 'Recommandations', value: '0', icon: Star, color: 'text-green-600' },
-    { label: 'Messages', value: '0', icon: MessageSquare, color: 'text-gray-600' },
-    { label: 'Progression', value: '0%', icon: TrendingUp, color: 'text-orange-600' },
-  ])
-  const [preferences, setPreferences] = useState<UserPreference | null>(null)
-  const [popularSujets, setPopularSujets] = useState<Sujet[]>([])
+  
+  // États
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [preferences, setPreferences] = useState<UserPreference | null>(null)
+  const [popularSujets, setPopularSujets] = useState<Sujet[]>([])
+  const [recommendations, setRecommendations] = useState<RecommendedSujet[]>([])
+  const [profileCompletion, setProfileCompletion] = useState(0)
 
   const quickActions = [
-    { title: 'Continuer le chat', href: '/dashboard/chat', icon: MessageSquare },
+    { title: 'Trouver mon sujet', href: '/dashboard/chat', icon: MessageSquare },
     { title: 'Voir recommandations', href: '/dashboard/recommendations', icon: Star },
-    // { title: 'Explorer sujets', href: '/dashboard/sujets', icon: Target },
-    // { title: 'Consulter ressources', href: '/dashboard/ressources', icon: FileText },
   ]
 
   useEffect(() => {
     fetchDashboardData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Calculer la progression du profil basée sur la page profile
+  const calculateProfileCompletion = (profile: UserPreference | null) => {
+    if (!profile) return 0
+    
+    const fields = [
+      profile.level,
+      profile.faculty,
+      profile.interests
+    ]
+    
+    const filledFields = fields.filter(field => field && field.trim() !== '').length
+    return Math.round((filledFields / fields.length) * 100)
+  }
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      let prefs: UserPreference | null = null
+      // Chargement parallèle de toutes les données
+      const [prefs, sujets, recs, statsData] = await Promise.all([
+        api.getPreferences().catch(() => null),
+        api.getPopularSujets(5).catch(() => []),
+        api.getPersonalizedRecommendations({ limit: 3 }).catch(() => []),
+        api.getUserDashboardStats().catch(() => null)
+      ])
 
-      // Récupérer les préférences utilisateur
-      try {
-        prefs = await api.getPreferences()
-        setPreferences(prefs)
-      } catch (prefError: any) {
-        console.error('Preferences error:', prefError?.message)
-        // Continuer sans préférences
-      }
+      setPreferences(prefs)
+      setPopularSujets(sujets)
+      setRecommendations(recs)
+      setStats(statsData)
+      
+      // Calculer la progression du profil
+      setProfileCompletion(calculateProfileCompletion(prefs))
 
-      // Récupérer les sujets populaires
-      try {
-        const sujets = await api.getPopularSujets(5)
-        setPopularSujets(sujets)
-
-        // Mettre à jour les stats avec des données réelles
-        setStats(prev =>
-          prev.map(stat => {
-            if (stat.label === 'Sujets') {
-              return { ...stat, value: sujets.length.toString() }
-            }
-            if (stat.label === 'Recommandations') {
-              // Exemple : nombre de recommandations basé sur les sujets
-              return { ...stat, value: (sujets.length * 2).toString() }
-            }
-            if (stat.label === 'Messages') {
-              // Exemple statique ou basée sur prefs plus tard
-              return { ...stat, value: '12' }
-            }
-            if (stat.label === 'Progression') {
-              const baseProgress = prefs ? 60 : 30
-              const sujetsBonus = sujets.length > 0 ? 20 : 0
-              return { ...stat, value: `${baseProgress + sujetsBonus}%` }
-            }
-            return stat
-          }),
-        )
-      } catch (sujetError: any) {
-        console.error('Sujets error:', sujetError?.message)
-      }
     } catch (error: any) {
-      console.error('General error fetching dashboard data:', error)
+      console.error('Error fetching dashboard data:', error)
       setError(error?.message || 'Erreur lors du chargement des données')
     } finally {
       setLoading(false)
@@ -110,33 +194,59 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">
-            Connexion au serveur, nous préparons les données pour vous...
-          </p>
-        </div>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
+
+  // Stats calculées
+  const displayStats = [
+    { 
+      label: 'Sujets', 
+      value: stats?.total_sujets?.toString() || popularSujets.length.toString() || '0', 
+      icon: Target, 
+      color: 'text-blue-600' 
+    },
+    { 
+      label: 'Recommandations', 
+      value: recommendations.length.toString() || '0', 
+      icon: Star, 
+      color: 'text-green-600' 
+    },
+    { 
+      label: 'Messages', 
+      value: '3', 
+      icon: MessageSquare, 
+      color: 'text-gray-600' 
+    },
+    { 
+      label: 'Progression', 
+      value: `${profileCompletion}%`, 
+      icon: TrendingUp, 
+      color: 'text-orange-600' 
+    },
+  ]
 
   return (
     <div className="space-y-6">
-      {/* En-tête avec nom d'utilisateur */}
+      {/* En-tête avec nom d'utilisateur et dernière activité */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Bonjour, {user?.full_name.split(' ')[0] || 'Étudiant'} !
+          Bonjour, {user?.full_name?.split(' ')[0] || 'Étudiant'} !
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mt-1">
-          Bienvenue sur votre espace de recherche de sujet
+          {stats?.last_activity 
+            ? `Dernière activité: ${new Date(stats.last_activity).toLocaleDateString('fr-FR', { 
+                day: 'numeric', 
+                month: 'long', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })}`
+            : 'Bienvenue sur votre espace de recherche de sujet'}
         </p>
       </div>
 
-      {/* Stats */}
+      {/* Stats avec données réelles */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, index) => (
+        {displayStats.map((stat, index) => (
           <div
             key={index}
             className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow"
@@ -152,7 +262,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Profil rapide */}
+      {/* Profil rapide avec données de la page profile */}
       {preferences && (
         <div className="bg-gradient-to-r from-blue-50 to-blue-50 dark:from-blue-900/20 dark:to-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 p-6">
           <div className="flex items-center justify-between">
@@ -181,7 +291,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <Star className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <span className="text-sm text-gray-700 dark:text-gray-300">
-                      Intérêts: <span className="font-medium">{preferences.interests}</span>
+                      Intérêts: <span className="font-medium line-clamp-1">{preferences.interests}</span>
                     </span>
                   </div>
                 )}
@@ -221,10 +331,17 @@ export default function DashboardPage() {
               </div>
             </Link>
           ))}
+          
+          {/* Afficher le nombre de recommandations */}
+          {recommendations.length > 0 && (
+            <div className="lg:col-span-4 text-xs text-gray-500 dark:text-gray-400 text-right">
+              {recommendations.length} nouvelle{recommendations.length > 1 ? 's' : ''} recommandation{recommendations.length > 1 ? 's' : ''} disponible{recommendations.length > 1 ? 's' : ''}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Contenu supplémentaire */}
+      {/* Contenu principal */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Sujets populaires */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
@@ -250,7 +367,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
                       <Eye className="w-4 h-4" />
-                      <span>{sujet.vue_count}</span>
+                      <span>{sujet.vue_count || 0}</span>
                     </div>
                   </div>
                 </Link>
@@ -263,37 +380,88 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Progression */}
+        {/* Progression détaillée basée sur la page profile */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Votre progression</h2>
           <div className="space-y-4">
             {[
-              { label: 'Profil complété', progress: preferences ? 100 : 50 },
-              { label: 'Critères définis', progress: preferences?.interests ? 85 : 30 },
-              { label: 'Sujets explorés', progress: popularSujets.length > 0 ? 60 : 20 },
-              { label: 'Analyse approfondie', progress: 30 },
+              { 
+                label: 'Profil complété', 
+                progress: profileCompletion,
+                details: profileCompletion === 100 ? 'Complet' : `${profileCompletion}%`
+              },
+              { 
+                label: 'Critères définis', 
+                progress: preferences?.interests ? 85 : 30,
+                details: preferences?.interests ? 'Définis' : 'À définir'
+              },
+              { 
+                label: 'Sujets explorés', 
+                progress: Math.min((stats?.total_sujets || popularSujets.length) * 20, 100),
+                details: `${stats?.total_sujets || popularSujets.length} sujets`
+              },
+              { 
+                label: 'Recommandations analysées', 
+                progress: Math.min(recommendations.length * 33, 100),
+                details: `${recommendations.length} recommandation${recommendations.length > 1 ? 's' : ''}`
+              },
             ].map((item, index) => (
               <div key={index}>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-700 dark:text-gray-300">{item.label}</span>
-                  <span className="font-medium text-gray-900 dark:text-white">{item.progress}%</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {item.details}
+                  </span>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                   <div
                     className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${item.progress}%` }}
+                    style={{ width: `${Math.min(item.progress, 100)}%` }}
                   ></div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Suggestion d'action */}
+          {/* Suggestion d'action personnalisée */}
           <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              💡 <strong>Conseil :</strong> Complétez vos préférences pour obtenir des recommandations plus précises.
+              💡 <strong>Conseil :</strong>{' '}
+              {!preferences 
+                ? 'Complétez vos préférences pour obtenir des recommandations plus précises.'
+                : recommendations.length === 0
+                ? 'Explorez plus de sujets pour recevoir des recommandations personnalisées.'
+                : `${recommendations.length} recommandation${recommendations.length > 1 ? 's' : ''} vous attendent !`}
             </p>
           </div>
+
+          {/* Mots-clés populaires */}
+          {stats?.popular_keywords && stats.popular_keywords.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Mots-clés populaires :</p>
+              <div className="flex flex-wrap gap-2">
+                {stats.popular_keywords.slice(0, 3).map((kw, i) => (
+                  <span key={i} className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
+                    {kw.keyword} ({kw.count})
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Afficher quelques recommandations si disponibles */}
+          {recommendations.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Aperçu des recommandations :</p>
+              {recommendations.slice(0, 2).map((rec, i) => (
+                <div key={i} className="text-xs text-gray-600 dark:text-gray-400 mb-1 flex items-center gap-2">
+                  <Zap className="w-3 h-3 text-yellow-500" />
+                  <span className="line-clamp-1">{rec.sujet.titre}</span>
+                  <span className="text-green-600">{Math.round(rec.score)}%</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

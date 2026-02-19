@@ -3,16 +3,24 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, X, Send, Bot, Loader2, Sparkles, Brain, User } from 'lucide-react'
+import { 
+  MessageSquare, X, Send, Bot, Loader2, Sparkles, Brain, User, 
+  StopCircle, RefreshCw, AlertCircle 
+} from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+import { toast } from 'sonner'
 
 interface Message {
-    id: number
+    id: string
     text: string
     sender: 'user' | 'bot'
     timestamp: string
+    isError?: boolean
 }
+
+// Clé pour le localStorage
+const STORAGE_KEY = 'memobot_conversation'
 
 export default function MemoBotAssistant() {
     const [isOpen, setIsOpen] = useState(false)
@@ -23,168 +31,330 @@ export default function MemoBotAssistant() {
     const [showGenerateModal, setShowGenerateModal] = useState(false)
     const [isGenerating, setIsGenerating] = useState(false)
     const [showResetConfirm, setShowResetConfirm] = useState(false)
+    const [abortController, setAbortController] = useState<AbortController | null>(null)
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
     const { user } = useAuth()
 
-    // Fonction utilitaire pour l'heure
+    // Charger la conversation depuis localStorage au démarrage
+    useEffect(() => {
+        const savedConversation = localStorage.getItem(STORAGE_KEY)
+        if (savedConversation) {
+            try {
+                const parsed = JSON.parse(savedConversation)
+                setMessages(parsed)
+            } catch (e) {
+                console.error('Erreur chargement conversation:', e)
+            }
+        }
+    }, [])
+
+    // Sauvegarder la conversation dans localStorage
+    useEffect(() => {
+        if (messages.length > 0) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
+        }
+    }, [messages])
+
     function getCurrentTime() {
         return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
 
-    // Initialiser la conversation quand le modal s'ouvre
+    // Fonction pour générer un ID unique
+    const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+    // Initialiser la conversation si vide
     useEffect(() => {
         if (isOpen && messages.length === 0) {
             initializeConversation()
         }
-    }, [isOpen, messages.length])
+    }, [isOpen])
 
+    // Scroll vers le dernier message
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, [messages, isTyping])
+
+    // Focus sur l'input quand le chat s'ouvre
+    useEffect(() => {
+        if (isOpen && inputRef.current) {
+            setTimeout(() => {
+                inputRef.current?.focus()
+            }, 300)
+        }
+    }, [isOpen])
 
     // Initialiser la conversation avec les infos utilisateur
-const initializeConversation = async () => {
-    try {
-        console.log("🔍 Récupération des données utilisateur...");
-
-        if (!user || !user.id) {
-            console.log("⚠️ Utilisateur non connecté");
-            return;
-        }
-
-        // 1. Récupérer le PROFIL utilisateur
-        let profile;
+    const initializeConversation = async () => {
         try {
-            profile = await api.getUserProfile(user.id);
-            console.log("✅ Profil récupéré:", profile);
-        } catch (error) {
-            console.log("⚠️ Impossible de récupérer le profil:", error);
-        }
+            console.log("🔍 Récupération des données utilisateur...")
 
-        // 2. Récupérer les COMPÉTENCES utilisateur
-        let skills: any[] = [];
-        try {
-            skills = await api.getUserSkills(user.id);
-            console.log("✅ Compétences récupérées:", skills);
-        } catch (error) {
-            console.log("⚠️ Impossible de récupérer les compétences:", error);
-        }
-
-        // 3. Construire les intérêts à partir du profil ET des compétences
-        let interests = [];
-
-        // Ajouter les intérêts du profil
-        if (profile?.interests) {
-            interests.push(...profile.interests.split(',').map(i => i.trim()));
-        }
-
-        // Ajouter les compétences comme intérêts
-        if (skills.length > 0) {
-            skills.forEach(skill => {
-                interests.push(skill.name);
-                if (skill.category) {
-                    interests.push(skill.category);
+            if (!user || !user.id) {
+                const welcomeMessage: Message = {
+                    id: generateId(),
+                    text: "Bonjour ! 👋\n\nJe suis MemoBot, votre assistant pour trouver le sujet de mémoire idéal.\n\nParlez-moi de votre projet :\n• Quel est votre domaine d'étude ?\n• Quels sont vos centres d'intérêt ?\n• Avez-vous des idées de sujet ?",
+                    sender: 'bot',
+                    timestamp: getCurrentTime()
                 }
-            });
+                setMessages([welcomeMessage])
+                return
+            }
+
+            // Récupérer le profil utilisateur
+            let profile
+            try {
+                profile = await api.getUserProfile(user.id)
+                console.log("✅ Profil récupéré:", profile)
+            } catch (error) {
+                console.log("⚠️ Impossible de récupérer le profil:", error)
+            }
+
+            // Récupérer les compétences
+            let skills: any[] = []
+            try {
+                skills = await api.getUserSkills(user.id)
+                console.log("✅ Compétences récupérées:", skills)
+            } catch (error) {
+                console.log("⚠️ Impossible de récupérer les compétences:", error)
+            }
+
+            // Construire le message d'accueil personnalisé
+            const name = user?.full_name ? user.full_name.split(' ')[0] : 'Cher utilisateur'
+            
+            let welcomeText = `Bonjour ${name} ! 👋\n\n`
+
+            if (profile?.level || profile?.field) {
+                welcomeText += `Je vois votre profil `
+                if (profile.level) welcomeText += `en ${profile.level}`
+                if (profile.field) welcomeText += profile.level ? ` en ${profile.field}` : `dans le domaine ${profile.field}`
+                welcomeText += `.\n\n`
+            }
+
+            if (profile?.interests) {
+                const interests = profile.interests.split(',').map(i => i.trim()).slice(0, 3)
+                if (interests.length > 0) {
+                    welcomeText += `Vous êtes intéressé par ${interests.join(', ')}. `
+                }
+            }
+
+            if (skills.length > 0) {
+                const topSkill = skills.sort((a, b) => b.level - a.level)[0]
+                welcomeText += `Je vois que vous maîtrisez ${topSkill.name}. `
+            }
+
+            welcomeText += `\n\nJe suis là pour vous aider à trouver **le sujet de mémoire parfait**.\n\n`
+            welcomeText += `Parlez-moi de votre projet :\n`
+            welcomeText += `• Qu'est-ce qui vous inspire ?\n`
+            welcomeText += `• Des idées en tête ?\n`
+            welcomeText += `• Des technologies qui vous intéressent ?`
+
+            const welcomeMessage: Message = {
+                id: generateId(),
+                text: welcomeText,
+                sender: 'bot',
+                timestamp: getCurrentTime()
+            }
+
+            setMessages([welcomeMessage])
+
+        } catch (error) {
+            console.error("❌ Erreur initialisation conversation:", error)
+            const fallbackMessage: Message = {
+                id: generateId(),
+                text: "Bonjour ! 👋\n\nJe suis MemoBot, votre assistant pour trouver le sujet de mémoire idéal.\n\nParlez-moi de votre projet.",
+                sender: 'bot',
+                timestamp: getCurrentTime()
+            }
+            setMessages([fallbackMessage])
+        }
+    }
+
+    // Arrêter la génération en cours
+    const handleStopGeneration = () => {
+        if (abortController) {
+            abortController.abort()
+            setAbortController(null)
+            setIsLoading(false)
+            setIsTyping(false)
+            toast.info('Génération arrêtée')
+        }
+    }
+
+    // Détecter si un message est trop court
+    const isMessageTooShort = (text: string): boolean => {
+        const words = text.trim().split(/\s+/).length
+        return words < 3 || text.length < 20
+    }
+
+    // Générer une suggestion basée sur un message trop court
+    const getSuggestionForShortMessage = (text: string): string => {
+        const lowerText = text.toLowerCase()
+        
+        if (lowerText.includes('bonjour') || lowerText.includes('salut')) {
+            return "Pour mieux vous aider, pourriez-vous me parler de votre domaine d'étude ou de vos centres d'intérêt ?"
+        }
+        
+        if (lowerText.includes('aide') || lowerText.includes('aider')) {
+            return "Je suis là pour ça ! Pour commencer, quel est votre domaine d'étude et qu'est-ce qui vous passionne ?"
+        }
+        
+        if (lowerText.includes('sujet') || lowerText.includes('mémoire')) {
+            return "Excellent ! Pour vous proposer des sujets pertinents, pourriez-vous me dire dans quel domaine vous étudiez et ce qui vous intéresse particulièrement ?"
+        }
+        
+        return "Votre message est un peu court. Pourriez-vous me donner plus de détails sur votre projet, votre domaine d'étude ou vos centres d'intérêt ?"
+    }
+
+    // Envoyer un message
+    const handleSend = useCallback(async (text?: string) => {
+        const messageToSend = text || message.trim()
+        if (!messageToSend || isLoading) return
+
+        // Créer un nouvel AbortController pour cette requête
+        const controller = new AbortController()
+        setAbortController(controller)
+
+        // Ajouter le message utilisateur
+        const userMessage: Message = {
+            id: generateId(),
+            text: messageToSend,
+            sender: 'user',
+            timestamp: getCurrentTime()
         }
 
-        // Filtrer les doublons
-        const uniqueInterests = [...new Set(interests.filter(i => i && i.length > 2))];
-        console.log("🎯 Intérêts calculés:", uniqueInterests);
+        setMessages(prev => [...prev, userMessage])
+        if (!text) setMessage('')
+        setIsLoading(true)
+        setIsTyping(true)
 
-        // Créer le message d'introduction avec VRAIES données
-        const initialMessage: Message = {
-            id: 1,
-            text: getInitialGreeting(user, profile, skills, uniqueInterests),
-            sender: 'bot',
-            timestamp: getCurrentTime()
-        };
+        try {
+            // Vérifier si le message est trop court
+            if (isMessageTooShort(messageToSend)) {
+                await new Promise(resolve => setTimeout(resolve, 800))
+                setIsTyping(false)
+                
+                const suggestionMessage: Message = {
+                    id: generateId(),
+                    text: getSuggestionForShortMessage(messageToSend),
+                    sender: 'bot',
+                    timestamp: getCurrentTime()
+                }
+                setMessages(prev => [...prev, suggestionMessage])
+                setIsLoading(false)
+                setAbortController(null)
+                return
+            }
 
-        setMessages([initialMessage]);
+            // Construire l'historique complet pour le contexte
+            const conversationHistory = messages
+                .map(m => `${m.sender === 'user' ? 'Étudiant' : 'MemoBot'}: ${m.text}`)
+                .join('\n\n')
 
-    } catch (error) {
-        console.error("❌ Erreur initialisation conversation:", error);
-        const fallbackMessage: Message = {
-            id: 1,
-            text: `Bonjour ! 👋\n\nJe suis MemoBot, votre assistant pour trouver le sujet de mémoire idéal.\n\nParlez-moi de votre projet.`,
-            sender: 'bot',
-            timestamp: getCurrentTime()
-        };
-        setMessages([fallbackMessage]);
-    }
-};
+            // Appel API avec AbortController
+            const response = await api.chatWithAI({
+                message: messageToSend,
+                context: conversationHistory
+            })
 
-// Fonction pour formater les listes de manière naturelle
-const formatList = (items: string[]): string => {
-    if (items.length === 0) return '';
-    if (items.length === 1) return items[0];
-    if (items.length === 2) return `${items[0]} et ${items[1]}`;
-    return items.slice(0, -1).join(', ') + ' et ' + items[items.length - 1];
-};
+            // Vérifier si la requête a été annulée
+            if (controller.signal.aborted) {
+                setAbortController(null)
+                return
+            }
 
-// Version courte et précise du message de bienvenue
-const getInitialGreeting = (
-    user: any,
-    profile: any,
-    skills: any[],
-    interests: string[]
-) => {
-    const name = user?.full_name ? user.full_name.split(' ')[0] : 'Cher utilisateur';
-    
-    // Choisir une salutation aléatoire
-    const greetings = [
-        `Bonjour ${name} ! 👋`,
-        `Salut ${name} ! 😊`,
-        `Coucou ${name} ! 🚀`
-    ];
-    const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
-    
-    // Récupérer les informations principales
-    const level = profile?.level ? `en ${profile.level}` : '';
-    const field = profile?.field || profile?.faculty || '';
-    const mainInterests = interests.slice(0, 3);
-    const topSkill = skills.length > 0 
-        ? skills.sort((a, b) => b.level - a.level)[0].name 
-        : null;
-    
-    // Construire le message étape par étape
-    let message = `${randomGreeting}\n\n`;
-    
-    // Profil académique
-    if (level || field) {
-        message += `Je vois votre profil ${level} ${field ? `en ${field}` : ''}.\n\n`;
-    }
-    
-    // Intérêts
-    if (mainInterests.length > 0) {
-        message += `Passionné par ${formatList(mainInterests)}`;
-        if (topSkill) {
-            message += ` et compétent en ${topSkill}`;
+            // Simulation de frappe naturelle
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            setIsTyping(false)
+
+            // Ajouter la réponse du bot
+            const botMessage: Message = {
+                id: generateId(),
+                text: response.message || "Je vais réfléchir à cela et vous proposer des pistes intéressantes.",
+                sender: 'bot',
+                timestamp: getCurrentTime()
+            }
+
+            setMessages(prev => [...prev, botMessage])
+
+            // Vérifier si on a assez d'infos pour proposer la génération
+            const userMessages = [...messages, userMessage].filter(m => m.sender === 'user')
+            const totalUserText = userMessages.map(m => m.text).join(' ').length
+            
+            if (totalUserText > 300 && !showGenerateModal && !isGenerating) {
+                setTimeout(() => {
+                    setShowGenerateModal(true)
+                }, 1500)
+            }
+
+        } catch (error: any) {
+            if (error.name === 'AbortError' || controller.signal.aborted) {
+                console.log('Requête annulée')
+            } else {
+                console.error('Erreur API:', error)
+                setIsTyping(false)
+
+                const errorMessage: Message = {
+                    id: generateId(),
+                    text: "Je rencontre une difficulté technique. Pouvez-vous reformuler votre demande ?",
+                    sender: 'bot',
+                    timestamp: getCurrentTime(),
+                    isError: true
+                }
+
+                setMessages(prev => [...prev, errorMessage])
+            }
+        } finally {
+            setIsLoading(false)
+            setAbortController(null)
         }
-        message += ` !\n\n`;
+    }, [message, isLoading, messages, showGenerateModal, isGenerating])
+
+    // Réinitialiser la conversation
+    const handleResetConversation = async () => {
+        try {
+            if (abortController) {
+                abortController.abort()
+                setAbortController(null)
+            }
+
+            await api.resetConversation()
+            setMessages([])
+            localStorage.removeItem(STORAGE_KEY)
+            setShowResetConfirm(false)
+            setShowGenerateModal(false)
+
+            initializeConversation()
+            toast.success('Conversation réinitialisée')
+
+        } catch (error) {
+            console.error('Erreur réinitialisation:', error)
+            setMessages([])
+            localStorage.removeItem(STORAGE_KEY)
+            setShowResetConfirm(false)
+
+            const welcomeMessage: Message = {
+                id: generateId(),
+                text: "Conversation réinitialisée. Parlons d'un nouveau sujet !",
+                sender: 'bot',
+                timestamp: getCurrentTime()
+            }
+            setMessages([welcomeMessage])
+        }
     }
-    
-    // Proposition d'aide
-    message += `Je suis là pour vous aider à trouver **le sujet de mémoire parfait**.\n\n`;
-    message += `Parlez-moi de votre projet :\n`;
-    message += `• Qu'est-ce qui vous inspire ?\n`;
-    message += `• Des idées en tête ?\n`;
-    message += `• Des technologies qui vous intéressent ?`;
-    
-    return message;
-};
-    // Ajoutez cette fonction pour gérer la génération depuis la conversation
+
+    // Gérer la génération de sujets depuis la conversation
     const handleGenerateFromConversation = async () => {
         if (!user) {
-            alert('Veuillez vous connecter pour générer des sujets')
+            toast.error('Veuillez vous connecter pour générer des sujets')
             return
         }
 
         setIsGenerating(true)
         setShowGenerateModal(false)
 
-        // Message d'attente
         const waitingMessage: Message = {
-            id: Date.now(),
+            id: generateId(),
             text: "🔄 J'analyse toute notre conversation pour générer des sujets parfaitement adaptés...\n\nCela prendra quelques secondes.",
             sender: 'bot',
             timestamp: getCurrentTime()
@@ -195,20 +365,17 @@ const getInitialGreeting = (
             const response = await api.generateFromConversation()
 
             if (response?.subjects && response.subjects.length > 0) {
-                // Message de succès
                 const successMessage: Message = {
-                    id: Date.now() + 1,
+                    id: generateId(),
                     text: `✅ J'ai généré ${response.subjects.length} sujets basés sur l'ensemble de notre discussion !\n\nRedirection vers la page des recommandations...`,
                     sender: 'bot',
                     timestamp: getCurrentTime()
                 }
                 setMessages(prev => [...prev, successMessage])
 
-                // Stocker les sujets générés dans localStorage pour la page suivante
                 localStorage.setItem('generated_subjects', JSON.stringify(response.subjects))
                 localStorage.setItem('generation_session_id', response.session_id)
 
-                // Rediriger après 2 secondes
                 setTimeout(() => {
                     window.location.href = '/dashboard/recommendations/chat?source=chat&session=' + response.session_id
                 }, 2000)
@@ -218,251 +385,11 @@ const getInitialGreeting = (
             console.error('Erreur génération:', error)
 
             const errorMessage: Message = {
-                id: Date.now() + 1,
-                text: "Désolé, je n'ai pas pu générer de sujets. Soit je n'ai pas assez d'informations, soit il y a un problème technique. Continuons notre discussion !",
+                id: generateId(),
+                text: "Désolé, je n'ai pas pu générer de sujets. Continuons notre discussion !",
                 sender: 'bot',
-                timestamp: getCurrentTime()
-            }
-            setMessages(prev => [...prev, errorMessage])
-        } finally {
-            setIsGenerating(false)
-        }
-    }
-
-
-    // Scroll vers le dernier message
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, [messages])
-
-    // Focus sur l'input quand le chat s'ouvre
-    useEffect(() => {
-        if (isOpen && inputRef.current) {
-            setTimeout(() => {
-                inputRef.current?.focus()
-            }, 300)
-        }
-    }, [isOpen])
-    const handleResetConversation = async () => {
-        try {
-            // Appeler l'API pour réinitialiser côté serveur
-            await api.resetConversation()
-
-            // Réinitialiser localement
-            setMessages([])
-            setShowResetConfirm(false)
-            setShowGenerateModal(false)
-
-            // Réinitialiser avec un nouveau message
-            const resetMessage: Message = {
-                id: Date.now(),
-                text: "🧹 La conversation a été réinitialisée.\n\nJe suis MemoBot, votre assistant pour trouver le sujet de mémoire idéal.\n\nParlons d'un nouveau sujet !\n\nDe quoi voulez-vous discuter ?\n• Votre domaine d'étude\n• Vos intérêts de recherche\n• Vos contraintes académiques",
-                sender: 'bot',
-                timestamp: getCurrentTime()
-            }
-
-            setMessages([resetMessage])
-
-        } catch (error) {
-            console.error('Erreur réinitialisation:', error)
-
-            // Fallback local
-            setMessages([])
-            setShowResetConfirm(false)
-
-            const errorMessage: Message = {
-                id: Date.now(),
-                text: "Conversation réinitialisée localement. Parlons d'un nouveau sujet !",
-                sender: 'bot',
-                timestamp: getCurrentTime()
-            }
-            setMessages([errorMessage])
-        }
-    }
-    // Nouveau useEffect pour détecter quand afficher le modal
-    useEffect(() => {
-        if (messages.length >= 2) { // Au moins 2 échanges
-            const lastMessage = messages[messages.length - 1]
-            const secondLastMessage = messages[messages.length - 2]
-
-            // Vérifier si l'utilisateur vient de donner des informations substantielles
-            if (lastMessage.sender === 'user' && lastMessage.text.length > 50) {
-                // Compter les messages utilisateur récents
-                const recentUserMessages = messages
-                    .slice(-4) // 4 derniers messages
-                    .filter(m => m.sender === 'user')
-                    .map(m => m.text)
-
-                const totalUserText = recentUserMessages.join(' ').length
-
-                // Si l'utilisateur a donné assez d'informations (au moins 200 caractères)
-                if (totalUserText > 200 && !showGenerateModal) {
-                    // Attendre 1 seconde pour ne pas interrompre
-                    setTimeout(() => {
-                        setShowGenerateModal(true)
-
-                        // Optionnel : Ajouter un message du bot
-                        const botMessage: Message = {
-                            id: Date.now(),
-                            text: "✨ Excellent ! J'ai bien compris votre projet. Je peux maintenant vous proposer des sujets de mémoire adaptés.",
-                            sender: 'bot',
-                            timestamp: getCurrentTime()
-                        }
-                        setMessages(prev => [...prev, botMessage])
-                    }, 1000)
-                }
-            }
-        }
-    }, [messages, showGenerateModal])
-
-    // Fonction pour envoyer un message
-    const handleSend = useCallback(async (text?: string) => {
-        const messageToSend = text || message.trim()
-        if (!messageToSend || isLoading) return
-
-        // Ajouter message utilisateur
-        const userMessage: Message = {
-            id: Date.now(),
-            text: messageToSend,
-            sender: 'user',
-            timestamp: getCurrentTime()
-        }
-
-        setMessages(prev => [...prev, userMessage])
-        if (!text) setMessage('')
-
-        setIsLoading(true)
-        setIsTyping(true)
-
-        try {
-            // Construire le contexte
-            const conversationContext = messages
-                .map(m => `${m.sender}: ${m.text}`)
-                .join('\n')
-
-            // Utiliser l'API de chat
-            const response = await api.chatWithAI({
-                message: messageToSend,
-                context: conversationContext
-            })
-
-            // Simulation de frappe naturelle
-            await new Promise(resolve => setTimeout(resolve, 1000))
-            setIsTyping(false)
-
-            // Ajouter réponse de l'IA
-            const botMessage: Message = {
-                id: Date.now() + 1,
-                text: response.message || "Je vais réfléchir à cela et vous proposer des pistes intéressantes.",
-                sender: 'bot',
-                timestamp: getCurrentTime()
-            }
-
-            setMessages(prev => [...prev, botMessage])
-
-            // DÉTECTION AMÉLIORÉE pour afficher le modal
-            // Vérifier si l'utilisateur a donné une description complète
-            const isCompleteDescription =
-                messageToSend.length > 100 &&
-                (messageToSend.toLowerCase().includes('je veux') ||
-                    messageToSend.toLowerCase().includes('mon projet') ||
-                    messageToSend.toLowerCase().includes('sujet') ||
-                    messageToSend.toLowerCase().includes('mémoire'))
-
-            // Compter tous les messages utilisateur
-            const allUserMessages = [...messages, userMessage]
-                .filter(m => m.sender === 'user')
-                .map(m => m.text)
-                .join(' ')
-
-            const hasEnoughInfo = allUserMessages.length > 300
-
-            if ((isCompleteDescription || hasEnoughInfo) && !showGenerateModal) {
-                // Attendre 2 secondes avant d'afficher le modal
-                setTimeout(() => {
-                    setShowGenerateModal(true)
-                }, 2000)
-            }
-
-        } catch (error) {
-            console.error('Erreur API:', error)
-            setIsTyping(false)
-
-            const errorMessage: Message = {
-                id: Date.now() + 1,
-                text: "Je rencontre une difficulté technique. Pouvez-vous reformuler votre demande ?",
-                sender: 'bot',
-                timestamp: getCurrentTime()
-            }
-
-            setMessages(prev => [...prev, errorMessage])
-        } finally {
-            setIsLoading(false)
-        }
-    }, [message, isLoading, messages, showGenerateModal])
-
-    // Gérer la génération de sujets
-    const handleGenerateSubjects = async () => {
-        if (!user) {
-            alert('Veuillez vous connecter pour générer des sujets')
-            return
-        }
-
-        setIsGenerating(true)
-
-        // Ajouter message d'attente
-        const waitingMessage: Message = {
-            id: Date.now(),
-            text: "🔄 J'analyse notre conversation et je génère des sujets pertinents pour vous...\n\nCela prendra quelques secondes.",
-            sender: 'bot',
-            timestamp: getCurrentTime()
-        }
-        setMessages(prev => [...prev, waitingMessage])
-
-        try {
-            // Extraire les intérêts de la conversation
-            const userText = messages
-                .filter(m => m.sender === 'user')
-                .map(m => m.text)
-                .join(' ')
-
-            // Récupérer les préférences
-            const preferences = await api.getPreferences()
-
-            // Générer 3 sujets
-            const subjects = await api.generateThreeSubjects({
-                interests: userText.split(/[\s,.!?]+/).filter(w => w.length > 3).slice(0, 5),
-                domaine: preferences?.field || 'Informatique',
-                niveau: preferences?.level || 'Master',
-                faculté: preferences?.faculty || 'Sciences'
-            })
-
-            setShowGenerateModal(false)
-
-            if (subjects?.subjects && subjects.subjects.length > 0) {
-                // Message de succès
-                const successMessage: Message = {
-                    id: Date.now() + 1,
-                    text: `✅ J'ai généré ${subjects.subjects.length} sujets basés sur notre discussion !\n\nVous pouvez maintenant :\n1. Consulter les détails de chaque sujet\n2. Les sauvegarder dans votre collection\n3. Continuer à affiner avec moi`,
-                    sender: 'bot',
-                    timestamp: getCurrentTime()
-                }
-                setMessages(prev => [...prev, successMessage])
-
-                // Rediriger vers la page de recommandations
-                // setTimeout(() => {
-                //     window.location.href = '/dashboard/recommendations'
-                // }, 3000)
-            }
-
-        } catch (error) {
-            console.error('Erreur génération:', error)
-
-            const errorMessage: Message = {
-                id: Date.now() + 1,
-                text: "Désolé, je n'ai pas pu générer de sujets pour le moment. Continuons notre discussion pour mieux cerner vos besoins.",
-                sender: 'bot',
-                timestamp: getCurrentTime()
+                timestamp: getCurrentTime(),
+                isError: true
             }
             setMessages(prev => [...prev, errorMessage])
         } finally {
@@ -481,50 +408,9 @@ const getInitialGreeting = (
         }
     }
 
-    // Fonction pour analyser si la conversation est "mûre" pour la génération
-    const isConversationReadyForGeneration = useCallback((msgs: Message[]): boolean => {
-        if (msgs.length < 3) return false
-
-        const userMessages = msgs
-            .filter(m => m.sender === 'user')
-            .map(m => m.text.toLowerCase())
-
-        // Mots-clés indiquant une description de projet
-        const projectKeywords = [
-            'je veux', 'je souhaite', 'mon projet', 'mon idée',
-            'développer', 'créer', 'faire', 'réaliser',
-            'application', 'système', 'logiciel', 'mobile', 'web',
-            'surveiller', 'analyser', 'optimiser', 'automatiser',
-            'mémoire', 'sujet', 'thème', 'problématique'
-        ]
-
-        // Compter les mots-clés présents
-        const keywordCount = projectKeywords.filter(keyword =>
-            userMessages.some(msg => msg.includes(keyword))
-        ).length
-
-        // Vérifier la longueur totale
-        const totalTextLength = userMessages.join(' ').length
-
-        // Conditions pour générer :
-        // 1. Au moins 4 mots-clés de projet
-        // 2. Au moins 200 caractères de texte
-        // 3. Pas déjà en train de générer
-        return keywordCount >= 4 && totalTextLength > 200 && !isGenerating
-    }, [isGenerating])
-
-
-    useEffect(() => {
-        if (isConversationReadyForGeneration(messages) && !showGenerateModal) {
-            // Attendre un peu
-            setTimeout(() => {
-                setShowGenerateModal(true)
-            }, 1500)
-        }
-    }, [messages, isConversationReadyForGeneration, showGenerateModal])
     return (
         <>
-            {/* Bouton flottant simple */}
+            {/* Bouton flottant */}
             <button
                 onClick={() => setIsOpen(true)}
                 className="fixed bottom-6 right-6 animate-bounce z-40 w-14 h-14 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center group"
@@ -532,11 +418,8 @@ const getInitialGreeting = (
             >
                 <Brain className="w-6 h-6" />
 
-                {/* Badge de notification */}
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse" />
-
-                {/* Texte au survol */}
-                <span className="absolute -top-10 transform -translate-x-1/2 bg-gray-900 text-white text-xs dark:bg-blue-700 hover:animate-none  p-4 rounded-full opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                <span className="absolute -top-10 transform -translate-x-1/2 bg-gray-900 text-white text-xs p-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                     Trouvez votre sujet
                 </span>
             </button>
@@ -566,25 +449,22 @@ const getInitialGreeting = (
                                     </div>
                                     <div>
                                         <h2 className="font-semibold text-gray-900 dark:text-white">MemoBot Assistant</h2>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Votre guide pour le sujet idéal</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            {messages.length} messages • Contexte préservé
+                                        </p>
                                     </div>
                                 </div>
 
-                                {/* Boutons d'action */}
                                 <div className="flex items-center gap-2">
-                                    {/* Bouton Réinitialiser - visible seulement avec au moins 2 messages */}
                                     {messages.length > 1 && (
                                         <button
                                             onClick={() => setShowResetConfirm(true)}
                                             className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                             title="Réinitialiser la conversation"
                                         >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
+                                            <RefreshCw className="w-5 h-5" />
                                         </button>
                                     )}
-
                                     <button
                                         onClick={() => setIsOpen(false)}
                                         className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
@@ -603,12 +483,17 @@ const getInitialGreeting = (
                                             className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                                         >
                                             <div className={`max-w-[85%] ${msg.sender === 'user' ? 'ml-auto' : ''}`}>
-                                                <div className={`rounded-lg px-3 py-2 ${msg.sender === 'user'
-                                                    ? 'bg-blue-600 text-white'
-                                                    : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200'
-                                                    }`}>
+                                                <div className={`rounded-lg px-3 py-2 ${
+                                                    msg.sender === 'user'
+                                                        ? 'bg-blue-600 text-white'
+                                                        : msg.isError
+                                                        ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+                                                        : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200'
+                                                }`}>
                                                     <p className="whitespace-pre-wrap text-sm">{msg.text}</p>
-                                                    <div className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-blue-200' : 'text-gray-500'}`}>
+                                                    <div className={`text-xs mt-1 ${
+                                                        msg.sender === 'user' ? 'text-blue-200' : 'text-gray-500'
+                                                    }`}>
                                                         {msg.timestamp}
                                                     </div>
                                                 </div>
@@ -651,20 +536,36 @@ const getInitialGreeting = (
                                             disabled={isLoading}
                                         />
                                         <div className="absolute right-2 bottom-2 text-xs text-gray-400">
-                                            ↵ pour envoyer
+                                            {message.length > 0 && `${message.length} caractères`}
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => handleSend()}
-                                        disabled={!message.trim() || isLoading}
-                                        className="px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                                    >
-                                        {isLoading ? (
-                                            <Loader2 className="w-5 h-5 animate-spin" />
-                                        ) : (
+                                    
+                                    {isLoading ? (
+                                        <button
+                                            onClick={handleStopGeneration}
+                                            className="px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center"
+                                            title="Arrêter"
+                                        >
+                                            <StopCircle className="w-5 h-5" />
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleSend()}
+                                            disabled={!message.trim()}
+                                            className="px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                                        >
                                             <Send className="w-5 h-5" />
-                                        )}
-                                    </button>
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex justify-between">
+                                    <span>Shift+Entrée pour nouvelle ligne • Entrée pour envoyer</span>
+                                    {message.length > 0 && message.length < 20 && (
+                                        <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                            <AlertCircle className="w-3 h-3" />
+                                            Message court
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </motion.div>
@@ -672,7 +573,7 @@ const getInitialGreeting = (
                 )}
             </AnimatePresence>
 
-            {/* Modal de confirmation pour réinitialiser */}
+            {/* Modal de confirmation réinitialisation */}
             <AnimatePresence>
                 {showResetConfirm && (
                     <motion.div
@@ -692,9 +593,7 @@ const getInitialGreeting = (
                             <div className="p-6">
                                 <div className="flex items-center justify-center mb-4">
                                     <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                                        <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
+                                        <RefreshCw className="w-6 h-6 text-red-600" />
                                     </div>
                                 </div>
 
@@ -703,7 +602,7 @@ const getInitialGreeting = (
                                 </h3>
 
                                 <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
-                                    Tous les messages de cette conversation seront supprimés et vous commencerez une nouvelle discussion.
+                                    Tous les messages de cette conversation seront supprimés ({messages.length} messages).
                                 </p>
 
                                 <div className="flex flex-col space-y-3">
@@ -713,12 +612,11 @@ const getInitialGreeting = (
                                     >
                                         Oui, réinitialiser
                                     </button>
-
                                     <button
                                         onClick={() => setShowResetConfirm(false)}
                                         className="w-full px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium rounded-xl transition-colors"
                                     >
-                                        Non, continuer
+                                        Annuler
                                     </button>
                                 </div>
                             </div>
@@ -726,9 +624,9 @@ const getInitialGreeting = (
                     </motion.div>
                 )}
             </AnimatePresence>
-            {/* Modal simple de génération */}
+
+            {/* Modal de génération */}
             <AnimatePresence>
-                // Modifiez le bouton dans le modal de génération
                 {showGenerateModal && (
                     <motion.div
                         initial={{ opacity: 0 }}
@@ -768,6 +666,13 @@ const getInitialGreeting = (
                                                 <p className="font-medium text-gray-800 dark:text-gray-200">
                                                     Analyse de votre conversation...
                                                 </p>
+                                                <button
+                                                    onClick={handleStopGeneration}
+                                                    className="mt-2 text-sm text-red-600 hover:text-red-700 flex items-center gap-1 mx-auto"
+                                                >
+                                                    <StopCircle className="w-4 h-4" />
+                                                    Arrêter
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -792,13 +697,12 @@ const getInitialGreeting = (
 
                                         <div className="flex flex-col space-y-3">
                                             <button
-                                                onClick={handleGenerateFromConversation} // Utiliser la nouvelle fonction
+                                                onClick={handleGenerateFromConversation}
                                                 className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-3"
                                             >
                                                 <Sparkles className="w-5 h-5" />
                                                 <span>Générer 3 sujets depuis la conversation</span>
                                             </button>
-
                                             <button
                                                 onClick={() => setShowGenerateModal(false)}
                                                 className="w-full px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium rounded-xl transition-colors"

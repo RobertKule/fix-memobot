@@ -5,20 +5,21 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from app.dependencies import get_current_user, get_db,get_current_active_user
 from app import schemas, crud
+from app.llm_service import repondre_comme_expert, analyser_conversation_expert
 from app.recommendation import recommendation_engine
-from app.llm_service import répondre_question_cohérente
+
 from app.models import User,ConversationMessage
 router = APIRouter(tags=["ai"])
 
 # Importer dynamiquement le service LLM
 try:
     from app.llm_service import (
-        répondre_question, 
         get_acceptance_criteria, 
         analyser_sujet,
         générer_sujets_llm,
         get_tips,
-        recommander_sujets_llm
+        recommander_sujets_llm,
+        repondre_comme_expert
     )
     LLM_AVAILABLE = True
 except ImportError as e:
@@ -26,7 +27,7 @@ except ImportError as e:
     LLM_AVAILABLE = False
     
     # Fonctions de secours (version améliorée)
-    def répondre_question(question: str, contexte: str = None) -> str:
+    def repondre_comme_expert(question: str, contexte: str = None) -> str:
         return """Je suis MemoBot, votre assistant pour les sujets de mémoire. Pour mieux vous aider :
         
 1. **Décrivez votre domaine d'étude et vos intérêts**
@@ -303,6 +304,7 @@ async def save_chosen_subject(
             detail=f"Erreur lors de la sauvegarde: {str(e)}"
         )
 
+
 @router.post("/chat", response_model=schemas.AIChatResponse)
 async def chat_with_ai(
     request: schemas.AIChatRequest,
@@ -330,11 +332,18 @@ async def chat_with_ai(
             for h in conversation_history[-5:]  # 5 derniers messages
         ])
         
-        # Obtenir la réponse cohérente AVEC préférences
-        message = répondre_question_cohérente(
+        # Analyser la conversation
+        messages_list = [
+            {"role": msg.role, "content": msg.content}
+            for msg in conversation_history
+        ]
+        analyse = analyser_conversation_expert(messages_list)
+        
+        # Obtenir la réponse avec les bons paramètres
+        message = repondre_comme_expert(
             question=request.message,
-            contexte=history_context,
-            user_preferences=user_preferences
+            historique=history_context,
+            analyse=analyse
         )
         
         # Sauvegarder la conversation
@@ -354,25 +363,15 @@ async def chat_with_ai(
         
         # Analyser si on a assez d'infos pour proposer la génération
         should_show_generate = False
-        if conversation_history:
-            # Compter les messages de l'utilisateur
-            user_messages = [h for h in conversation_history if h.role == 'user']
-            total_user_text = sum(len(msg.content) for msg in user_messages)
-            
-            # Mots-clés indiquant une description complète
-            keywords = ['projet', 'mémoire', 'sujet', 'veux', 'souhaite', 'intéresse', 'domaine']
-            user_text = " ".join([msg.content.lower() for msg in user_messages])
-            keyword_count = sum(1 for kw in keywords if kw in user_text)
-            
-            if total_user_text > 200 and keyword_count >= 3:
-                should_show_generate = True
+        if analyse.get("peut_proposer_sujets"):
+            should_show_generate = True
         
         suggestions = []
         if should_show_generate:
             suggestions = [
-                "J'ai suffisamment d'informations sur votre projet",
-                "Je peux maintenant générer des sujets pertinents pour vous",
-                "Voulez-vous que je génère 3 sujets basés sur notre discussion ?"
+                "J'ai assez d'informations sur votre projet",
+                "Je peux maintenant générer des sujets pertinents",
+                "Voulez-vous que je génère 3 sujets ?"
             ]
         
         return {
@@ -392,51 +391,42 @@ async def chat_with_ai(
             "actions": [],
             "timestamp": datetime.utcnow().isoformat()
         }
-
+    
 # la route pour communiquer avec notre AI
+# backend/app/routes/ai.py
+
 @router.post("/ask", response_model=schemas.AIResponse)
 async def ask_question(
     request: schemas.AIRequest,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Route legacy pour compatibilité avec l'ancien frontend - AVEC CONTEXTE COMPLET"""
+    """Répond comme un expert humain, avec mémoire de la conversation"""
     try:
-        # 1. RÉCUPÉRER TOUT L'HISTORIQUE RÉCENT
-        conversation_history = crud.get_conversation_history(db, current_user.id, limit=10)
+        # Récupérer l'historique
+        conversation_history = crud.get_conversation_history(db, current_user.id, limit=20)
         
-        # 2. CONSTRUIRE UN CONTEXTE RICHE
-        history_context = "HISTORIQUE DE LA CONVERSATION (du plus ancien au plus récent):\n"
-        for msg in conversation_history[-5:]:  # 5 derniers messages seulement
-            role = "ÉTUDIANT" if msg.role == 'user' else "MEMOBOT"
-            history_context += f"{role}: {msg.content}\n"
+        # Préparer l'historique pour le contexte
+        historique_texte = ""
+        for msg in conversation_history[-8:]:  # 8 derniers messages
+            role = "Étudiant" if msg.role == 'user' else "Professeur"
+            historique_texte += f"{role}: {msg.content}\n"
         
-        # 3. AJOUTER LES PRÉFÉRENCES
-        preference = crud.get_or_create_preference(db, current_user.id)
-        user_info = ""
-        if preference:
-            if preference.interests:
-                user_info += f"Intérêts connus: {preference.interests}. "
-            if preference.level:
-                user_info += f"Niveau académique: {preference.level}. "
-            if preference.faculty:
-                user_info += f"Faculté: {preference.faculty}. "
+        # Analyser la conversation comme le ferait un expert
+        messages_list = [
+            {"role": msg.role, "content": msg.content}
+            for msg in conversation_history
+        ]
+        analyse = analyser_conversation_expert(messages_list)
         
-        # 4. CONSTRUIRE LE CONTEXTE COMPLET
-        full_context = f"""
-        INFORMATIONS UTILISATEUR:
-        {user_info if user_info else "Pas d'informations supplémentaires."}
+        # Obtenir la réponse naturelle
+        reponse = repondre_comme_expert(
+            question=request.question,
+            historique=historique_texte,
+            analyse=analyse
+        )
         
-        {history_context if conversation_history else "Pas d'historique précédent."}
-        
-        NOTE IMPORTANTE: Tu dois RESTER COHÉRENT avec l'historique ci-dessus.
-        Si l'étudiant change de sujet abruptement, rappelle-lui gentiment le sujet en cours.
-        """
-        
-        # 5. Obtenir la réponse AVEC CONTEXTE COMPLET
-        message = répondre_question(request.question, full_context)
-        
-        # 6. SAUVEGARDER LA CONVERSATION
+        # Sauvegarder les messages
         crud.save_conversation_message(
             db,
             user_id=current_user.id,
@@ -448,29 +438,43 @@ async def ask_question(
             db,
             user_id=current_user.id,
             role="assistant",
-            content=message
+            content=reponse
         )
         
-        # 7. Suggestions intelligentes basées sur le contenu
+        # Suggestions naturelles
         suggestions = []
-        if any(word in request.question.lower() for word in ['génie', 'civil', 'bâtiment', 'construction']):
-            suggestions.append("Voir des exemples de sujets en génie civil")
-            suggestions.append("Explorer les méthodologies pour projets de construction")
+        if analyse.get("questions_a_poser"):
+            suggestions.append(analyse["questions_a_poser"][0])
         
         return schemas.AIResponse(
             question=request.question,
-            message=message,
-            suggestions=suggestions[:2]  # Max 2 suggestions
+            message=reponse,
+            suggestions=suggestions,
+            peut_generer=analyse.get("peut_proposer_sujets", False)
         )
         
     except Exception as e:
-        print(f"Erreur dans ask_question: {e}")
+        print(f"Erreur: {e}")
         return schemas.AIResponse(
             question=request.question,
-            message=f"Je vois que tu parles de '{request.question[:40]}...'. Pour rester cohérent avec notre discussion, pourrais-tu préciser le lien avec notre sujet précédent ?",
-            suggestions=["Reprendre le sujet précédent", "Clarifier le lien entre les idées"]
+            message="Je vous écoute. Parlez-moi de votre projet.",
+            suggestions=[],
+            peut_generer=False
         )
-        
+    
+def répondre_question_sans_llm(question: str, analysis: Dict) -> str:
+    """Fallback quand LLM non disponible"""
+    if len(question) < 20:
+        return "Pourriez-vous préciser votre demande ?"
+    
+    if analysis["a_assez_info"]:
+        return "J'ai assez d'informations sur votre projet. Voulez-vous que je génère des sujets de mémoire ?"
+    
+    if analysis["manques"]:
+        return f"Pour mieux vous aider, pourriez-vous me parler de votre {analysis['manques'][0]} ?"
+    
+    return "Parlez-moi de votre projet de mémoire."
+      
 @router.post("/recommend", response_model=List[schemas.RecommendedSujet])
 async def recommend_with_ai(
     request: schemas.RecommendationRequest,
@@ -674,31 +678,25 @@ async def generate_subjects_from_conversation(
 @router.post("/ask-public", response_model=schemas.AIResponse)
 async def ask_question_public(
     request: schemas.AIRequest,
-    db: Session = Depends(get_db)  # Pas de get_current_user ici
+    db: Session = Depends(get_db)
 ):
     """Route publique pour le chat - accessible sans authentification"""
     try:
-        # Construire un prompt simple
-        context = "Utilisateur non connecté posant une question sur un sujet de mémoire."
+        # Construire un contexte simple
+        context = "Utilisateur non connecté"
         
-        # Obtenir la réponse de l'IA
-        message = répondre_question(request.question, context)
+        # Obtenir la réponse avec les bons paramètres
+        message = repondre_comme_expert(
+            question=request.question,
+            historique="",
+            analyse=None
+        )
         
-        # Nettoyer la réponse
-        if "**RÉPONSE:**" in message:
-            message = message.split("**RÉPONSE:**")[-1].strip()
-        
-        # Suggestions génériques pour les non-connectés
+        # Suggestions génériques
         suggestions = [
             "Créez un compte gratuit pour sauvegarder vos conversations",
-            "Accédez à notre base de sujets en vous inscrivant",
-            "Recevez des recommandations personnalisées avec un compte"
+            "Accédez à notre base de sujets en vous inscrivant"
         ]
-        
-        # Ajouter une suggestion pour s'inscrire si la question concerne des sujets
-        question_lower = request.question.lower()
-        if any(word in question_lower for word in ['sujet', 'thème', 'idée', 'projet', 'mémoire']):
-            suggestions.append("Inscrivez-vous pour générer des sujets personnalisés avec IA")
         
         return schemas.AIResponse(
             question=request.question,
@@ -710,13 +708,10 @@ async def ask_question_public(
         print(f"Erreur dans ask_question_public: {e}")
         return schemas.AIResponse(
             question=request.question,
-            message="Je suis désolé, je rencontre des difficultés techniques. Veuillez réessayer.",
-            suggestions=[
-                "Réessayez votre question",
-                "Contactez-nous si le problème persiste"
-            ]
+            message="Je suis désolé, je rencontre des difficultés techniques.",
+            suggestions=["Réessayez votre question"]
         )
-
+    
 # Vous pouvez aussi créer une route d'analyse publique
 @router.post("/analyze-public", response_model=schemas.AIAnalysisResponse)
 async def analyze_subject_public(

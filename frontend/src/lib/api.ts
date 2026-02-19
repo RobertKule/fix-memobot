@@ -93,6 +93,7 @@ export interface AIResponse {
   question: string
   message: string
   suggestions: string[]
+  peut_generer?: boolean
 }
 
 export interface GeneratedSubject {

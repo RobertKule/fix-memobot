@@ -1,14 +1,13 @@
 // src/app/dashboard/admin/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users,
   FileText,
   Settings,
   Shield,
-  Database,
   Activity,
   AlertCircle,
   CheckCircle,
@@ -16,38 +15,31 @@ import {
   RefreshCw,
   Search,
   Eye,
-  Edit,
   Trash2,
-  UserPlus,
-  Server,
-  Cpu,
-  HardDrive,
-  Clock,
-  Save,
-  X,
   ChevronLeft,
   ChevronRight,
   Loader2,
   AlertTriangle,
-  ExternalLink,
   UserCheck,
   UserX,
-  ShieldCheck,
-  ShieldOff,
   Archive,
   BarChart3,
   MessageSquare,
   ThumbsUp,
   Brain,
+  Filter,
+  Plus,
+  X,
+  Save,
+  BookOpen,
+  GraduationCap,
+  Tag,
+  AlignLeft,
+  ListTodo,
   Zap,
-  Terminal,
-  Database as DatabaseIcon,
-  Cloud,
-  Target,
-  TrendingUp,
-  Award,
-  Plus
+  Clock
 } from 'lucide-react'
+import Link from 'next/link'
 import { api, User, Sujet } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -56,15 +48,16 @@ interface AdminStats {
   totalUsers: number
   activeUsers: number
   totalSujets: number
+  activeSujets: number
   aiAnalyses: number
-  storageUsage: number
-  apiCalls: number
+  newUsers7d: number
+  newSujets7d: number
   systemHealth: number
 }
 
 interface RecentActivity {
   id: number
-  type: 'user' | 'sujet' | 'ai' | 'system' | 'feedback' | 'chat'
+  type: 'user' | 'sujet' | 'ai' | 'system' | 'feedback'
   action: string
   user: string
   timestamp: string
@@ -72,353 +65,792 @@ interface RecentActivity {
   color: string
 }
 
-interface PaginationData<T> {
-  items: T[]
-  total: number
-  page: number
-  limit: number
-  totalPages: number
+interface DomainStat {
+  domaine: string
+  count: number
+  avg_views: number
 }
 
-// Modals
-interface ConfirmModalData {
-  title: string
-  message: string
-  action: () => Promise<void>
-  type: 'delete' | 'deactivate' | 'activate' | 'promote' | 'demote' | 'reset'
+interface RoleStat {
+  role: string
+  count: number
 }
 
-// Système de santé
-interface SystemHealth {
-  database: boolean
-  aiService: boolean
-  api: boolean
-  storage: boolean
-  cache: boolean
-  backups: boolean
+// Type pour le formulaire de création de sujet
+interface NewSujetForm {
+  titre: string
+  description: string
+  keywords: string
+  domaine: string
+  niveau: string
+  faculté: string
+  problématique: string
+  méthodologie: string
+  technologies: string
+  difficulté: 'facile' | 'moyenne' | 'difficile'
+  durée_estimée: string
+  ressources: string
 }
 
+// --- SKELETON ---
+const AdminSkeleton = () => (
+  <div className="space-y-6 animate-pulse">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-6">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+            <div>
+              <div className="h-8 w-64 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+              <div className="h-4 w-48 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+            <div className="h-6 w-40 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+          </div>
+        </div>
+        <div className="h-10 w-32 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+      </div>
+
+      <div className="flex gap-2 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="h-10 w-24 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+        ))}
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+            <div className="text-right">
+              <div className="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded mb-1"></div>
+              <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+          </div>
+          <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+      ))}
+    </div>
+
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+        <div className="h-6 w-40 bg-gray-200 dark:bg-gray-700 rounded mb-6"></div>
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-16 bg-gray-100 dark:bg-gray-700/50 rounded-xl"></div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+        <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-6"></div>
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-10 bg-gray-100 dark:bg-gray-700/50 rounded-xl"></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+)
+// Créer un composant séparé pour le modal
+const CreateSujetModal = ({ isOpen, onClose, onSuccess }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: (sujet: Sujet) => void;
+}) => {
+  const [activeTab, setActiveTab] = useState<'info' | 'academic' | 'methodology' | 'resources'>('info')
+  const [createLoading, setCreateLoading] = useState(false)
+  const [newSujet, setNewSujet] = useState<NewSujetForm>({
+    titre: '',
+    description: '',
+    keywords: '',
+    domaine: '',
+    niveau: '',
+    faculté: '',
+    problématique: '',
+    méthodologie: '',
+    technologies: '',
+    difficulté: 'moyenne',
+    durée_estimée: '',
+    ressources: ''
+  })
+
+  const tabs = [
+    { id: 'info', label: 'Informations', icon: FileText },
+    { id: 'academic', label: 'Académique', icon: GraduationCap },
+    { id: 'methodology', label: 'Méthodologie', icon: ListTodo },
+    { id: 'resources', label: 'Ressources', icon: BookOpen },
+  ]
+
+  const isTabValid = (tabId: string): boolean => {
+    switch (tabId) {
+      case 'info':
+        return newSujet.titre.trim() !== '' &&
+          newSujet.description.trim() !== ''
+      case 'academic':
+        return newSujet.domaine.trim() !== '' &&
+          newSujet.niveau.trim() !== ''
+      default:
+        return true
+    }
+  }
+
+  const handleCreateSujet = async () => {
+    // Validation
+    if (!newSujet.titre.trim()) {
+      toast.error('Titre requis', {
+        description: 'Veuillez saisir un titre pour le sujet.'
+      })
+      setActiveTab('info')
+      return
+    }
+    if (!newSujet.description.trim()) {
+      toast.error('Description requise', {
+        description: 'Veuillez saisir une description.'
+      })
+      setActiveTab('info')
+      return
+    }
+    if (!newSujet.domaine.trim()) {
+      toast.error('Domaine requis', {
+        description: 'Veuillez saisir le domaine.'
+      })
+      setActiveTab('academic')
+      return
+    }
+    if (!newSujet.niveau.trim()) {
+      toast.error('Niveau requis', {
+        description: 'Veuillez saisir le niveau.'
+      })
+      setActiveTab('academic')
+      return
+    }
+
+    setCreateLoading(true)
+    const toastId = toast.loading('Création du sujet en cours...')
+
+    try {
+      const createdSujet = await api.createUserSujet(newSujet)
+
+      toast.success('Sujet créé avec succès', {
+        description: `Le sujet "${createdSujet.titre}" a été ajouté.`,
+        icon: <CheckCircle className="w-4 h-4" />,
+        id: toastId
+      })
+
+      onSuccess(createdSujet)
+      onClose()
+
+      // Réinitialiser le formulaire
+      setNewSujet({
+        titre: '',
+        description: '',
+        keywords: '',
+        domaine: '',
+        niveau: '',
+        faculté: '',
+        problématique: '',
+        méthodologie: '',
+        technologies: '',
+        difficulté: 'moyenne',
+        durée_estimée: '',
+        ressources: ''
+      })
+      setActiveTab('info')
+
+    } catch (error: any) {
+      toast.error('Erreur lors de la création', {
+        description: error?.message || 'Une erreur est survenue.',
+        id: toastId
+      })
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-4xl border border-gray-200 dark:border-gray-700 shadow-2xl my-8 flex flex-col max-h-[90vh]"
+      >
+        {/* En-tête fixe */}
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Plus className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Créer un nouveau sujet</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Remplissez les informations pour créer un nouveau sujet de mémoire
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+
+          {/* Navigation par onglets */}
+          <div className="flex flex-wrap gap-2 mt-6">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              const isValid = isTabValid(tab.id)
+
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all text-sm font-medium relative ${activeTab === tab.id
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                  {!isValid && tab.id !== activeTab && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  )}
+                  {!isValid && tab.id === activeTab && (
+                    <span className="ml-2 text-xs bg-red-500/20 text-red-200 px-1.5 py-0.5 rounded-full">
+                      Requis
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Corps défilant avec les différents onglets */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Onglet Informations de base */}
+          {activeTab === 'info' && (
+            <motion.div
+              key="info"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Titre du sujet <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newSujet.titre}
+                  onChange={(e) => setNewSujet(prev => ({ ...prev, titre: e.target.value }))}
+                  className={`w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${!newSujet.titre.trim() ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-gray-600'
+                    }`}
+                  placeholder="Ex: Intelligence Artificielle dans l'éducation"
+                />
+                {!newSujet.titre.trim() && (
+                  <p className="text-xs text-red-500 mt-1">Le titre est requis</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Description <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={newSujet.description}
+                  onChange={(e) => setNewSujet(prev => ({ ...prev, description: e.target.value }))}
+                  rows={4}
+                  className={`w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${!newSujet.description.trim() ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-gray-600'
+                    }`}
+                  placeholder="Description détaillée du sujet..."
+                />
+                {!newSujet.description.trim() && (
+                  <p className="text-xs text-red-500 mt-1">La description est requise</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Mots-clés
+                </label>
+                <input
+                  type="text"
+                  value={newSujet.keywords}
+                  onChange={(e) => setNewSujet(prev => ({ ...prev, keywords: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="IA, Machine Learning, Éducation (séparés par des virgules)"
+                />
+                <p className="text-xs text-gray-500 mt-1">Séparez les mots-clés par des virgules</p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Onglet Académique */}
+          {activeTab === 'academic' && (
+            <motion.div
+              key="academic"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Domaine <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newSujet.domaine}
+                    onChange={(e) => setNewSujet(prev => ({ ...prev, domaine: e.target.value }))}
+                    className={`w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${!newSujet.domaine.trim() ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                    placeholder="Informatique, Sciences, etc."
+                  />
+                  {!newSujet.domaine.trim() && (
+                    <p className="text-xs text-red-500 mt-1">Le domaine est requis</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Niveau <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={newSujet.niveau}
+                    onChange={(e) => setNewSujet(prev => ({ ...prev, niveau: e.target.value }))}
+                    className={`w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${!newSujet.niveau ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                  >
+                    <option value="">Sélectionner un niveau</option>
+                    <option value="Licence 1">Licence 1</option>
+                    <option value="Licence 2">Licence 2</option>
+                    <option value="Licence 3">Licence 3</option>
+                    <option value="Master 1">Master 1</option>
+                    <option value="Master 2">Master 2</option>
+                    <option value="Doctorat">Doctorat</option>
+                  </select>
+                  {!newSujet.niveau && (
+                    <p className="text-xs text-red-500 mt-1">Le niveau est requis</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Faculté
+                </label>
+                <input
+                  type="text"
+                  value={newSujet.faculté}
+                  onChange={(e) => setNewSujet(prev => ({ ...prev, faculté: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Faculté des sciences, etc."
+                />
+              </div>
+            </motion.div>
+          )}
+
+          {/* Onglet Méthodologie */}
+          {activeTab === 'methodology' && (
+            <motion.div
+              key="methodology"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Problématique
+                </label>
+                <textarea
+                  value={newSujet.problématique}
+                  onChange={(e) => setNewSujet(prev => ({ ...prev, problématique: e.target.value }))}
+                  rows={3}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Question de recherche principale..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Méthodologie
+                </label>
+                <textarea
+                  value={newSujet.méthodologie}
+                  onChange={(e) => setNewSujet(prev => ({ ...prev, méthodologie: e.target.value }))}
+                  rows={3}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Méthodes de recherche envisagées..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Technologies
+                </label>
+                <input
+                  type="text"
+                  value={newSujet.technologies}
+                  onChange={(e) => setNewSujet(prev => ({ ...prev, technologies: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Python, TensorFlow, etc."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Difficulté
+                  </label>
+                  <select
+                    value={newSujet.difficulté}
+                    onChange={(e) => setNewSujet(prev => ({ ...prev, difficulté: e.target.value as any }))}
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="facile">Facile</option>
+                    <option value="moyenne">Moyenne</option>
+                    <option value="difficile">Difficile</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Durée estimée
+                  </label>
+                  <input
+                    type="text"
+                    value={newSujet.durée_estimée}
+                    onChange={(e) => setNewSujet(prev => ({ ...prev, durée_estimée: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="6 mois, 1 an, etc."
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Onglet Ressources */}
+          {activeTab === 'resources' && (
+            <motion.div
+              key="resources"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Ressources
+                </label>
+                <textarea
+                  value={newSujet.ressources}
+                  onChange={(e) => setNewSujet(prev => ({ ...prev, ressources: e.target.value }))}
+                  rows={4}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Liens, bibliographie, ressources recommandées..."
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Ajoutez des liens utiles, des références bibliographiques ou toute autre ressource
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        {/* Pied fixe avec progression et actions */}
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-2xl">
+          {/* Barre de progression */}
+          <div className="mb-4">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-gray-600 dark:text-gray-400">Progression</span>
+              <span className="font-medium text-gray-900 dark:text-white">
+                {Object.values({
+                  info: newSujet.titre && newSujet.description,
+                  academic: newSujet.domaine && newSujet.niveau,
+                  methodology: true,
+                  resources: true
+                }).filter(Boolean).length}/4 onglets
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{
+                  width: `${(Object.values({
+                    info: newSujet.titre && newSujet.description,
+                    academic: newSujet.domaine && newSujet.niveau,
+                    methodology: true,
+                    resources: true
+                  }).filter(Boolean).length / 4) * 100}%`
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-between gap-3">
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const currentIndex = tabs.findIndex(t => t.id === activeTab)
+                  if (currentIndex > 0) {
+                    setActiveTab(tabs[currentIndex - 1].id as any)
+                  }
+                }}
+                disabled={activeTab === tabs[0].id}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300"
+              >
+                Précédent
+              </button>
+              <button
+                onClick={() => {
+                  const currentIndex = tabs.findIndex(t => t.id === activeTab)
+                  if (currentIndex < tabs.length - 1) {
+                    setActiveTab(tabs[currentIndex + 1].id as any)
+                  }
+                }}
+                disabled={activeTab === tabs[tabs.length - 1].id}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300"
+              >
+                Suivant
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleCreateSujet}
+                disabled={createLoading || !newSujet.titre || !newSujet.description || !newSujet.domaine || !newSujet.niveau}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {createLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Créer le sujet
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
 export default function AdminDashboardPage() {
-  // États principaux
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'users' | 'sujets'>('overview')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [userFilter, setUserFilter] = useState<'all' | 'active' | 'inactive' | 'admin' | 'enseignant' | 'etudiant'>('all')
+  const [sujetFilter, setSujetFilter] = useState<'all' | 'active' | 'inactive' | 'popular' | 'recent'>('all')
+  const [showFilters, setShowFilters] = useState(false)
+
+  // Données
   const [stats, setStats] = useState<AdminStats>({
     totalUsers: 0,
     activeUsers: 0,
     totalSujets: 0,
+    activeSujets: 0,
     aiAnalyses: 0,
-    storageUsage: 0,
-    apiCalls: 0,
+    newUsers7d: 0,
+    newSujets7d: 0,
     systemHealth: 100
   })
 
-  const [users, setUsers] = useState<PaginationData<User>>({
-    items: [],
-    total: 0,
-    page: 1,
-    limit: 20,
-    totalPages: 1
-  })
-
-  const [sujets, setSujets] = useState<PaginationData<Sujet>>({
-    items: [],
-    total: 0,
-    page: 1,
-    limit: 20,
-    totalPages: 1
-  })
-
+  const [users, setUsers] = useState<User[]>([])
+  const [sujets, setSujets] = useState<Sujet[]>([])
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selectedTab, setSelectedTab] = useState<'overview' | 'users' | 'sujets' | 'system' | 'ai' | 'analytics'>('overview')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [userFilter, setUserFilter] = useState<'all' | 'active' | 'inactive' | 'admin' | 'enseignant' | 'etudiant'>('all')
-  const [sujetFilter, setSujetFilter] = useState<'all' | 'active' | 'inactive' | 'popular' | 'recent'>('all')
+  const [domainStats, setDomainStats] = useState<DomainStat[]>([])
+  const [roleStats, setRoleStats] = useState<RoleStat[]>([])
 
-  // États système
-  const [systemHealth, setSystemHealth] = useState<SystemHealth>({
-    database: false,
-    aiService: false,
-    api: false,
-    storage: true,
-    cache: true,
-    backups: true
-  })
+  // États de chargement pour les actions
+  const [actionLoading, setActionLoading] = useState<{ [key: string]: boolean }>({})
 
-  const [systemStatus, setSystemStatus] = useState<'healthy' | 'warning' | 'critical'>('healthy')
+  // Pagination
+  const [usersPage, setUsersPage] = useState(1)
+  const [sujetsPage, setSujetsPage] = useState(1)
+  const itemsPerPage = 20
 
-  // États pour les modals
-  const [confirmModal, setConfirmModal] = useState<ConfirmModalData | null>(null)
-  const [bulkActionModal, setBulkActionModal] = useState<{
-    type: 'activate' | 'deactivate' | 'delete'
-    items: (User | Sujet)[]
-    itemType: 'user' | 'sujet'
-  } | null>(null)
-
-  // États pour les sélections
+  // Sélections
   const [selectedUsers, setSelectedUsers] = useState<number[]>([])
   const [selectedSujets, setSelectedSujets] = useState<number[]>([])
-  const [bulkProcessing, setBulkProcessing] = useState(false)
 
-  // Charger les données initiales
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
+  // Modal de création de sujet
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
-  // Charger les utilisateurs quand la page ou le filtre change
-  useEffect(() => {
-    if (selectedTab === 'users') {
-      fetchUsers()
-    }
-  }, [selectedTab, users.page, userFilter, searchQuery])
+  // Modal
+  interface ConfirmModalData {
+    title: string
+    message: string
+    action: () => Promise<void>
+    type: 'delete' | 'deactivate' | 'activate'
+    itemId?: number
+    itemType?: 'user' | 'sujet'
+  }
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalData | null>(null)
 
-  // Charger les sujets quand la page ou le filtre change
-  useEffect(() => {
-    if (selectedTab === 'sujets') {
-      fetchSujets()
-    }
-  }, [selectedTab, sujets.page, sujetFilter, searchQuery])
+  // Charger toutes les données
+  // Charger toutes les données
+const fetchDashboardData = useCallback(async (showToast = false) => {
+  try {
+    setLoading(true)
+    setError(null)
 
-
-  const fetchDashboardData = async () => {
+    // Récupérer les stats admin
+    const adminStats = await api.getAdminStats().catch(() => null)
+    
+    // Récupérer TOUS les sujets avec pagination
+    let allSujets: Sujet[] = []
+    let sujetSkip = 0
+    const limit = 100
+    
     try {
-      setLoading(true)
-
-      // Récupérer les données réelles de l'API
-      const [adminStats, systemInfo] = await Promise.all([
-        api.getAdminStats().catch((error) => {
-          console.warn('Erreur API admin stats:', error)
-          // Retourner des valeurs par défaut si l'API n'est pas encore implémentée
-          return {
-            total_users: 0,
-            active_users: 0,
-            total_sujets: 0,
-            active_sujets: 0,
-            ai_analyses: 0,
-            domain_stats: [],
-            role_stats: [],
-            recent_stats: { new_users_7d: 0, new_sujets_7d: 0 },
-            recent_activities: [],
-            timestamp: new Date().toISOString()
+      let hasMoreSujets = true
+      while (hasMoreSujets) {
+        const sujetsPage = await api.getSujets({ 
+          skip: sujetSkip,
+          limit: limit
+        })
+        
+        if (sujetsPage && sujetsPage.length > 0) {
+          allSujets = [...allSujets, ...sujetsPage]
+          sujetSkip += limit
+          
+          if (sujetsPage.length < limit) {
+            hasMoreSujets = false
           }
-        }),
-        api.getSystemInfo().catch(() => null)
-      ])
-
-      // Calculer les statistiques de sujets
-      let totalSujets = adminStats.total_sujets
-      let activeSujets = adminStats.active_sujets
-
-      // Si les stats admin ne contiennent pas les données des sujets, les récupérer directement
-      if (totalSujets === 0) {
-        try {
-          const sujetsData = await api.getSujets({ limit: 100 })
-          totalSujets = sujetsData.length
-          activeSujets = sujetsData.filter(s => s.is_active).length
-        } catch (error) {
-          console.warn('Erreur récupération sujets:', error)
+        } else {
+          hasMoreSujets = false
         }
       }
+      
+      console.log(`✅ ${allSujets.length} sujets chargés`)
+      
+    } catch (error) {
+      console.warn('Erreur chargement sujets:', error)
+      const fallbackSujets = await api.getSujets({ limit: 100 }).catch(() => [])
+      allSujets = fallbackSujets
+    }
 
-      // Calculer la santé système
-      const systemHealthScore = calculateSystemHealth(systemInfo)
+    // Récupérer TOUS les utilisateurs avec pagination
+    let allUsers: User[] = []
+    let userSkip = 0
+    
+    try {
+      let hasMoreUsers = true
+      while (hasMoreUsers) {
+        // L'API admin/users retourne { users: [], total, skip, limit }
+        const usersResponse = await api.getAdminUsers({ 
+          skip: userSkip,
+          limit: limit
+        })
+        
+        console.log('Réponse users page:', usersResponse) // Debug
+        
+        if (usersResponse && usersResponse.users && usersResponse.users.length > 0) {
+          allUsers = [...allUsers, ...usersResponse.users]
+          userSkip += limit
+          
+          // Vérifier si on a atteint la fin
+          if (usersResponse.users.length < limit || 
+              allUsers.length >= usersResponse.total) {
+            hasMoreUsers = false
+          }
+        } else {
+          hasMoreUsers = false
+        }
+      }
+      
+      console.log(`✅ ${allUsers.length} utilisateurs chargés`)
+      
+    } catch (error) {
+      console.warn('Erreur chargement utilisateurs:', error)
+      // Fallback sur données mockées
+      allUsers = await getMockUsers()
+      console.log(`⚠️ ${allUsers.length} utilisateurs mockés chargés`)
+    }
 
-      // Mettre à jour les statistiques avec les données réelles
+    // Mettre à jour les états
+    setUsers(allUsers)
+    setSujets(allSujets)
+
+    if (adminStats) {
       setStats({
         totalUsers: adminStats.total_users,
         activeUsers: adminStats.active_users,
-        totalSujets: totalSujets,
+        totalSujets: adminStats.total_sujets,
+        activeSujets: adminStats.active_sujets,
         aiAnalyses: adminStats.ai_analyses,
-        storageUsage: 0, // À implémenter avec une API dédiée
-        apiCalls: 0, // À implémenter avec une API dédiée
-        systemHealth: systemHealthScore
+        newUsers7d: adminStats.recent_stats?.new_users_7d || 0,
+        newSujets7d: adminStats.recent_stats?.new_sujets_7d || 0,
+        systemHealth: calculateSystemHealth(adminStats)
       })
 
-      // Mettre à jour la santé du système
-      if (systemInfo) {
-        updateSystemHealth(systemInfo)
-      }
+      setDomainStats(adminStats.domain_stats || [])
+      setRoleStats(adminStats.role_stats || [])
 
-      // Générer des activités récentes basées sur les données admin
-      if (adminStats.recent_activities && adminStats.recent_activities.length > 0) {
+      if (adminStats.recent_activities) {
         setRecentActivities(
-          adminStats.recent_activities.slice(0, 6).map((activity, index) => ({
-            id: index + 1,
-            type: activity.type as 'user' | 'sujet' | 'ai' | 'system' | 'feedback' | 'chat',
-            action: activity.action,
-            user: activity.user,
-            timestamp: formatTimestamp(activity.timestamp),
-            icon: getActivityIcon(activity.type),
-            color: getActivityColor(activity.type)
+          adminStats.recent_activities.slice(0, 6).map((act, idx) => ({
+            id: idx + 1,
+            type: act.type as any,
+            action: act.action,
+            user: act.user,
+            timestamp: formatTimestamp(act.timestamp),
+            icon: getActivityIcon(act.type),
+            color: getActivityColor(act.type)
           }))
         )
-      } else {
-        // Fallback si pas d'activités récentes
-        try {
-          const recentSujets = await api.getSujets({ limit: 5 })
-          const mockUsers = await getMockUsers()
-          generateRecentActivities(mockUsers.slice(0, 3), recentSujets.slice(0, 3))
-        } catch (error) {
-          console.warn('Erreur génération activités fallback:', error)
-          setRecentActivities([])
-        }
       }
-
-    } catch (error) {
-      console.error('Erreur lors du chargement du tableau de bord:', error)
-      toast.error('Erreur lors du chargement du tableau de bord')
-    } finally {
-      setLoading(false)
     }
+
+    if (showToast) {
+      toast.success('Données actualisées avec succès', {
+        description: `${allSujets.length} sujets • ${allUsers.length} utilisateurs`
+      })
+    }
+
+  } catch (err: any) {
+    console.error('❌ Erreur chargement admin:', err)
+    setError(err?.message || 'Erreur lors du chargement des données')
+    if (showToast) {
+      toast.error('Erreur lors du chargement des données')
+    }
+  } finally {
+    setLoading(false)
   }
+}, [])
 
-  const fetchUsers = async () => {
-    try {
-      // Essayer d'utiliser l'API admin réelle
-      try {
-        const response = await api.getAdminUsers({
-          skip: (users.page - 1) * users.limit,
-          limit: users.limit,
-          search: searchQuery || undefined,
-          role: userFilter !== 'all' && userFilter !== 'active' && userFilter !== 'inactive'
-            ? userFilter
-            : undefined,
-          is_active: userFilter === 'active'
-            ? true
-            : userFilter === 'inactive'
-              ? false
-              : undefined
-        })
+  useEffect(() => {
+    fetchDashboardData()
+  }, [fetchDashboardData])
 
-        setUsers(prev => ({
-          ...prev,
-          items: response.users,
-          total: response.total,
-          totalPages: Math.ceil(response.total / users.limit)
-        }))
-
-      } catch (apiError) {
-        console.warn('API admin/users non disponible, utilisation des données mockées:', apiError)
-
-        // Fallback sur les données mockées si l'API n'est pas encore implémentée
-        const mockUsers = await getMockUsers()
-
-        // Filtrer les utilisateurs
-        let filteredUsers = mockUsers
-
-        if (searchQuery) {
-          filteredUsers = filteredUsers.filter(user =>
-            user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            user.full_name.toLowerCase().includes(searchQuery.toLowerCase())
-          )
-        }
-
-        if (userFilter !== 'all') {
-          filteredUsers = filteredUsers.filter(user => {
-            if (userFilter === 'active') return user.is_active
-            if (userFilter === 'inactive') return !user.is_active
-            if (userFilter === 'admin') return user.role === 'admin'
-            if (userFilter === 'enseignant') return user.role === 'enseignant'
-            if (userFilter === 'etudiant') return user.role === 'etudiant'
-            return true
-          })
-        }
-
-        // Pagination
-        const startIndex = (users.page - 1) * users.limit
-        const paginatedUsers = filteredUsers.slice(startIndex, startIndex + users.limit)
-
-        setUsers(prev => ({
-          ...prev,
-          items: paginatedUsers,
-          total: filteredUsers.length,
-          totalPages: Math.ceil(filteredUsers.length / users.limit)
-        }))
-      }
-
-    } catch (error) {
-      console.error('Erreur lors du chargement des utilisateurs:', error)
-      toast.error('Erreur lors du chargement des utilisateurs')
-    }
-  }
-
- const getMockUsers = async (): Promise<User[]> => {
-  // Ces données ne seront utilisées que si l'API admin n'est pas encore implémentée
-  return [
-    {
-      id: 1,
-      email: 'admin@memo.com',
-      full_name: 'Admin Principal',
-      role: 'admin',
-      is_active: true,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 2,
-      email: 'enseignant@memo.com',
-      full_name: 'Professeur Dupont',
-      role: 'enseignant',
-      is_active: true,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 3,
-      email: 'etudiant@memo.com',
-      full_name: 'Étudiant Martin',
-      role: 'etudiant',
-      is_active: true,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 4,
-      email: 'inactif@email.com',
-      full_name: 'Utilisateur Inactif',
-      role: 'etudiant',
-      is_active: false,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 5,
-      email: 'admin2@memo.com',
-      full_name: 'Admin Secondaire',
-      role: 'admin',
-      is_active: true,
-      created_at: new Date().toISOString()
-    }
-  ]
-}
-
-  const calculateSystemHealth = (systemInfo: any): number => {
-    if (!systemInfo) return 0
-
+  const calculateSystemHealth = (stats: any): number => {
     let score = 100
-    if (!systemInfo.database?.connected) score -= 40
-    if (!systemInfo.ai?.available) score -= 30
-    if (systemInfo.users?.total === 0) score -= 10
+    if (!stats) return 0
+    if (stats.total_users === 0) score -= 20
+    if (stats.total_sujets === 0) score -= 20
+    if (stats.active_users === 0) score -= 30
+    if (stats.active_sujets === 0) score -= 30
     return Math.max(0, score)
   }
-
-  const updateSystemHealth = (systemInfo: any) => {
-    if (!systemInfo) return
-
-    const newHealth: SystemHealth = {
-      database: systemInfo.database?.connected || false,
-      aiService: systemInfo.ai?.available || false,
-      api: true,
-      storage: true,
-      cache: true,
-      backups: true
-    }
-    setSystemHealth(newHealth)
-
-    const issues = Object.values(newHealth).filter(status => !status).length
-    if (issues === 0) {
-      setSystemStatus('healthy')
-    } else if (issues <= 2) {
-      setSystemStatus('warning')
-    } else {
-      setSystemStatus('critical')
-    }
-  }
-  // Ajoutez ces fonctions après les autres fonctions utilitaires dans votre composant
 
   const formatTimestamp = (timestamp: string): string => {
     try {
@@ -429,361 +861,383 @@ export default function AdminDashboardPage() {
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-      if (diffMinutes < 1) {
-        return 'À l\'instant'
-      } else if (diffMinutes < 60) {
-        return `Il y a ${diffMinutes} min`
-      } else if (diffHours < 24) {
-        return `Il y a ${diffHours} h`
-      } else if (diffDays === 1) {
-        return 'Hier'
-      } else if (diffDays < 7) {
-        return `Il y a ${diffDays} jours`
-      } else {
-        return date.toLocaleDateString('fr-FR', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric'
-        })
-      }
+      if (diffMinutes < 1) return 'À l\'instant'
+      if (diffMinutes < 60) return `Il y a ${diffMinutes} min`
+      if (diffHours < 24) return `Il y a ${diffHours} h`
+      if (diffDays === 1) return 'Hier'
+      if (diffDays < 7) return `Il y a ${diffDays} jours`
+      return date.toLocaleDateString('fr-FR')
     } catch {
       return timestamp
     }
   }
 
-  const getActivityIcon = (type: string): React.ReactNode => {
+  const getActivityIcon = (type: string) => {
     switch (type) {
-      case 'user':
-        return <Users className="w-4 h-4" />
-      case 'sujet':
-        return <FileText className="w-4 h-4" />
-      case 'ai':
-        return <Brain className="w-4 h-4" />
-      case 'system':
-        return <Settings className="w-4 h-4" />
-      case 'feedback':
-        return <MessageSquare className="w-4 h-4" />
-      case 'chat':
-        return <MessageSquare className="w-4 h-4" />
-      default:
-        return <Activity className="w-4 h-4" />
+      case 'user': return <Users className="w-4 h-4" />
+      case 'sujet': return <FileText className="w-4 h-4" />
+      case 'ai': return <Brain className="w-4 h-4" />
+      case 'feedback': return <MessageSquare className="w-4 h-4" />
+      default: return <Activity className="w-4 h-4" />
     }
   }
 
   const getActivityColor = (type: string): string => {
     switch (type) {
-      case 'user':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-      case 'sujet':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-      case 'ai':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
-      case 'system':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
-      case 'feedback':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-      case 'chat':
-        return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
+      case 'user': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+      case 'sujet': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+      case 'ai': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+      case 'feedback': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
     }
   }
 
-  const generateRecentActivities = (recentUsers: User[], recentSujets: Sujet[]) => {
-    const activities: RecentActivity[] = []
-
-    // Ajouter des activités basées sur les sujets récents
-    recentSujets.slice(0, 3).forEach((sujet, index) => {
-      activities.push({
-        id: index + 1,
-        type: 'sujet',
-        action: 'Sujet créé',
-        user: sujet.titre.substring(0, 30) + (sujet.titre.length > 30 ? '...' : ''),
-        timestamp: formatTimestamp(sujet.created_at),
-        icon: <FileText className="w-4 h-4" />,
-        color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-      })
-    })
-
-    // Ajouter des activités basées sur les utilisateurs
-    recentUsers.slice(0, 2).forEach((user, index) => {
-      activities.push({
-        id: index + 4,
-        type: 'user',
-        action: 'Nouvel utilisateur',
-        user: user.email,
-        timestamp: formatTimestamp(user.created_at),
-        icon: <Users className="w-4 h-4" />,
-        color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-      })
-    })
-
-    // Activité système
-    activities.push({
-      id: 6,
-      type: 'system',
-      action: 'Système mis à jour',
-      user: 'Admin',
-      timestamp: formatTimestamp(new Date().toISOString()),
-      icon: <Settings className="w-4 h-4" />,
-      color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
-    })
-
-    setRecentActivities(activities)
+  const getMockUsers = async (): Promise<User[]> => {
+    return [
+      {
+        id: 1,
+        email: 'admin@memoguide.com',
+        full_name: 'Admin Principal',
+        role: 'admin',
+        is_active: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 2,
+        email: 'jean.dupont@universite.fr',
+        full_name: 'Jean Dupont',
+        role: 'enseignant',
+        is_active: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 3,
+        email: 'marie.martin@etudiant.fr',
+        full_name: 'Marie Martin',
+        role: 'etudiant',
+        is_active: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 4,
+        email: 'inactif@email.com',
+        full_name: 'Compte Inactif',
+        role: 'etudiant',
+        is_active: false,
+        created_at: new Date().toISOString()
+      }
+    ]
   }
 
-  const fetchSujets = async () => {
-    try {
-      // Utiliser l'API réelle pour les sujets
-      const sujetsData = await api.getSujets({
-        limit: 100
-      })
-
-      // Filtrer les sujets
-      let filteredSujets = sujetsData
-
+  // Filtrage optimisé avec useMemo
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => {
       if (searchQuery) {
-        filteredSujets = filteredSujets.filter(sujet =>
-          sujet.titre.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          sujet.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          sujet.keywords.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      }
-
-      if (sujetFilter !== 'all') {
-        filteredSujets = filteredSujets.filter(sujet => {
-          if (sujetFilter === 'active') return sujet.is_active
-          if (sujetFilter === 'inactive') return !sujet.is_active
-          if (sujetFilter === 'popular') return sujet.vue_count > 50
-          if (sujetFilter === 'recent') {
-            const date = new Date(sujet.created_at)
-            const now = new Date()
-            const diffDays = (now.getTime() - date.getTime()) / (1000 * 3600 * 24)
-            return diffDays < 7
-          }
-          return true
-        })
-      }
-
-      // Pagination
-      const startIndex = (sujets.page - 1) * sujets.limit
-      const paginatedSujets = filteredSujets.slice(startIndex, startIndex + sujets.limit)
-
-      setSujets(prev => ({
-        ...prev,
-        items: paginatedSujets,
-        total: filteredSujets.length,
-        totalPages: Math.ceil(filteredSujets.length / sujets.limit)
-      }))
-
-    } catch (error) {
-      toast.error('Erreur lors du chargement des sujets')
-      console.error('Sujets fetch error:', error)
-    }
-  }
-
-  // Gestion des pages
-  const handleUsersPageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= users.totalPages) {
-      setUsers(prev => ({ ...prev, page: newPage }))
-    }
-  }
-
-  const handleSujetsPageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= sujets.totalPages) {
-      setSujets(prev => ({ ...prev, page: newPage }))
-    }
-  }
-
-  // Sélection multiple
-  const handleSelectAllUsers = (checked: boolean) => {
-    if (checked) {
-      setSelectedUsers(users.items.map(u => u.id))
-    } else {
-      setSelectedUsers([])
-    }
-  }
-
-  const handleSelectAllSujets = (checked: boolean) => {
-    if (checked) {
-      setSelectedSujets(sujets.items.map(s => s.id))
-    } else {
-      setSelectedSujets([])
-    }
-  }
-
-  // Actions sur les utilisateurs
-  const handleUserAction = async (userId: number, action: 'activate' | 'deactivate' | 'delete' | 'promote' | 'demote') => {
-    try {
-      // Utiliser les appels API réels
-      switch (action) {
-        case 'activate':
-          await api.activateUser(userId)
-          toast.success('Utilisateur activé avec succès')
-          break
-        case 'deactivate':
-          await api.deactivateUser(userId)
-          toast.warning('Utilisateur désactivé')
-          break
-        case 'delete':
-          await api.deleteUser(userId)
-          toast.error('Utilisateur supprimé')
-          break
-        case 'promote':
-          // À implémenter: api.promoteUser(userId)
-          toast.success('Utilisateur promu administrateur')
-          break
-        case 'demote':
-          // À implémenter: api.demoteUser(userId)
-          toast.info('Rôle utilisateur modifié')
-          break
-      }
-
-      // Recharger les données
-      await fetchUsers()
-      setConfirmModal(null)
-    } catch (error: any) {
-      console.error('Erreur lors de l\'opération utilisateur:', error)
-      toast.error(error?.message || 'Erreur lors de l\'opération')
-    }
-  }
-  // Actions sur les sujets
-  const handleSujetAction = async (sujetId: number, action: 'activate' | 'deactivate' | 'delete') => {
-    try {
-      switch (action) {
-        case 'activate':
-          await api.updateUserSujet(sujetId, { is_active: true })
-          toast.success('Sujet activé')
-          break
-        case 'deactivate':
-          await api.updateUserSujet(sujetId, { is_active: false })
-          toast.warning('Sujet désactivé')
-          break
-        case 'delete':
-          await api.deleteUserSujet(sujetId)
-          toast.error('Sujet supprimé')
-          break
-      }
-
-      await fetchSujets()
-      setConfirmModal(null)
-    } catch (error) {
-      toast.error('Erreur lors de l\'opération')
-    }
-  }
-
-  // Actions groupées
-  const handleBulkAction = async (action: 'activate' | 'deactivate' | 'delete') => {
-    if (!bulkActionModal) return
-
-    setBulkProcessing(true)
-
-    try {
-      const itemType = bulkActionModal.itemType
-      const itemCount = bulkActionModal.items.length
-
-      // Implémenter les actions groupées réelles
-      if (itemType === 'sujet') {
-        for (const item of bulkActionModal.items) {
-          const sujet = item as Sujet
-          if (action === 'delete') {
-            await api.deleteUserSujet(sujet.id)
-          } else {
-            await api.updateUserSujet(sujet.id, {
-              is_active: action === 'activate'
-            })
-          }
+        const query = searchQuery.toLowerCase()
+        if (!user.email.toLowerCase().includes(query) &&
+          !user.full_name.toLowerCase().includes(query)) {
+          return false
         }
       }
 
-      toast.success(`${itemCount} ${itemType}(s) ${action === 'activate' ? 'activé(s)' : action === 'deactivate' ? 'désactivé(s)' : 'supprimé(s)'}`)
+      if (userFilter === 'active') return user.is_active
+      if (userFilter === 'inactive') return !user.is_active
+      if (userFilter === 'admin') return user.role === 'admin'
+      if (userFilter === 'enseignant') return user.role === 'enseignant'
+      if (userFilter === 'etudiant') return user.role === 'etudiant'
 
-      // Recharger les données
-      if (itemType === 'user') {
-        await fetchUsers()
-        setSelectedUsers([])
-      } else {
-        await fetchSujets()
-        setSelectedSujets([])
+      return true
+    })
+  }, [users, searchQuery, userFilter])
+
+  const filteredSujets = useMemo(() => {
+    return sujets.filter(sujet => {
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        if (!sujet.titre.toLowerCase().includes(query) &&
+          !sujet.description.toLowerCase().includes(query)) {
+          return false
+        }
       }
 
-      setBulkActionModal(null)
-    } catch (error) {
-      toast.error('Erreur lors de l\'action groupée')
+      if (sujetFilter === 'active') return sujet.is_active
+      if (sujetFilter === 'inactive') return !sujet.is_active
+      if (sujetFilter === 'popular') return sujet.vue_count > 50
+      if (sujetFilter === 'recent') {
+        const date = new Date(sujet.created_at)
+        const now = new Date()
+        const diffDays = (now.getTime() - date.getTime()) / (1000 * 3600 * 24)
+        return diffDays < 7
+      }
+
+      return true
+    })
+  }, [sujets, searchQuery, sujetFilter])
+
+  // Pagination
+  const paginatedUsers = useMemo(() =>
+    filteredUsers.slice(
+      (usersPage - 1) * itemsPerPage,
+      usersPage * itemsPerPage
+    ), [filteredUsers, usersPage]
+  )
+
+  const paginatedSujets = useMemo(() =>
+    filteredSujets.slice(
+      (sujetsPage - 1) * itemsPerPage,
+      sujetsPage * itemsPerPage
+    ), [filteredSujets, sujetsPage]
+  )
+
+  const totalUsersPages = Math.ceil(filteredUsers.length / itemsPerPage)
+  const totalSujetsPages = Math.ceil(filteredSujets.length / itemsPerPage)
+
+  // Actions utilisateur
+  const handleUserAction = async (userId: number, action: 'activate' | 'deactivate' | 'delete') => {
+    const actionKey = `user-${userId}-${action}`
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }))
+
+    try {
+      if (action === 'delete') {
+        await api.deleteUser(userId)
+        setUsers(prev => prev.filter(u => u.id !== userId))
+        setSelectedUsers(prev => prev.filter(id => id !== userId))
+        toast.success('Utilisateur supprimé avec succès', {
+          description: `L'utilisateur a été définitivement supprimé.`,
+          icon: <Trash2 className="w-4 h-4" />
+        })
+      } else if (action === 'activate') {
+        await api.activateUser(userId)
+        setUsers(prev => prev.map(u =>
+          u.id === userId ? { ...u, is_active: true } : u
+        ))
+        toast.success('Utilisateur activé avec succès', {
+          description: `L'utilisateur peut maintenant se connecter.`,
+          icon: <UserCheck className="w-4 h-4" />
+        })
+      } else {
+        await api.deactivateUser(userId)
+        setUsers(prev => prev.map(u =>
+          u.id === userId ? { ...u, is_active: false } : u
+        ))
+        toast.warning('Utilisateur désactivé', {
+          description: `L'utilisateur ne peut plus se connecter.`,
+          icon: <UserX className="w-4 h-4" />
+        })
+      }
+
+      setStats(prev => ({
+        ...prev,
+        activeUsers: action === 'activate' ? prev.activeUsers + 1 :
+          action === 'deactivate' ? prev.activeUsers - 1 :
+            prev.activeUsers,
+        totalUsers: action === 'delete' ? prev.totalUsers - 1 : prev.totalUsers
+      }))
+
+      setConfirmModal(null)
+    } catch (error: any) {
+      toast.error('Erreur lors de l\'opération', {
+        description: error?.message || 'Une erreur est survenue.'
+      })
     } finally {
-      setBulkProcessing(false)
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }))
     }
   }
 
-  // Export de données
-  const handleExportData = async (type: 'users' | 'sujets') => {
+  // Actions sujet
+  const handleSujetAction = async (sujetId: number, action: 'activate' | 'deactivate' | 'delete') => {
+    const actionKey = `sujet-${sujetId}-${action}`
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }))
+
     try {
-      toast.info(`Export des ${type} en cours...`)
+      if (action === 'delete') {
+        await api.deleteUserSujet(sujetId)
+        setSujets(prev => prev.filter(s => s.id !== sujetId))
+        setSelectedSujets(prev => prev.filter(id => id !== sujetId))
+        toast.success('Sujet supprimé avec succès', {
+          description: `Le sujet a été définitivement supprimé.`,
+          icon: <Trash2 className="w-4 h-4" />
+        })
+      } else {
+        await api.updateUserSujet(sujetId, { is_active: action === 'activate' })
+        setSujets(prev => prev.map(s =>
+          s.id === sujetId ? { ...s, is_active: action === 'activate' } : s
+        ))
 
-      const blob = await api.exportUserData('json')
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `memobot_${type}_export_${new Date().toISOString().split('T')[0]}.json`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+        if (action === 'activate') {
+          toast.success('Sujet activé avec succès', {
+            description: `Le sujet est maintenant visible par tous.`,
+            icon: <Archive className="w-4 h-4" />
+          })
+        } else {
+          toast.warning('Sujet désactivé', {
+            description: `Le sujet n'est plus visible.`,
+            icon: <Archive className="w-4 h-4" />
+          })
+        }
+      }
 
-      toast.success('Export terminé avec succès')
-    } catch (error) {
-      toast.error('Erreur lors de l\'export')
+      setStats(prev => ({
+        ...prev,
+        activeSujets: action === 'activate' ? prev.activeSujets + 1 :
+          action === 'deactivate' ? prev.activeSujets - 1 :
+            prev.activeSujets,
+        totalSujets: action === 'delete' ? prev.totalSujets - 1 : prev.totalSujets
+      }))
+
+      setConfirmModal(null)
+    } catch (error: any) {
+      toast.error('Erreur lors de l\'opération', {
+        description: error?.message || 'Une erreur est survenue.'
+      })
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }))
     }
   }
 
-  // Analyse IA d'un sujet
-  const analyzeSujet = async (sujet: Sujet) => {
+  // Création de sujet
+  const handleCreateSujet = async () => {
+    // Validation
+    if (!newSujet.titre.trim()) {
+      toast.error('Titre requis', {
+        description: 'Veuillez saisir un titre pour le sujet.'
+      })
+      return
+    }
+    if (!newSujet.description.trim()) {
+      toast.error('Description requise', {
+        description: 'Veuillez saisir une description.'
+      })
+      return
+    }
+    if (!newSujet.domaine.trim()) {
+      toast.error('Domaine requis', {
+        description: 'Veuillez saisir le domaine.'
+      })
+      return
+    }
+    if (!newSujet.niveau.trim()) {
+      toast.error('Niveau requis', {
+        description: 'Veuillez saisir le niveau.'
+      })
+      return
+    }
+
+    setCreateLoading(true)
+    const toastId = toast.loading('Création du sujet en cours...')
+
     try {
-      toast.info('Analyse IA en cours...')
-      const analysis = await api.analyzeSubject({
-        titre: sujet.titre,
-        description: sujet.description,
-        domaine: sujet.domaine,
-        niveau: sujet.niveau,
-        faculté: sujet.faculté,
-        problématique: sujet.problématique,
-        keywords: sujet.keywords
+      const createdSujet = await api.createUserSujet(newSujet)
+
+      // Ajouter le nouveau sujet à la liste
+      setSujets(prev => [createdSujet, ...prev])
+
+      // Mettre à jour les stats
+      setStats(prev => ({
+        ...prev,
+        totalSujets: prev.totalSujets + 1,
+        activeSujets: prev.activeSujets + 1
+      }))
+
+      // Ajouter une activité récente
+      const newActivity: RecentActivity = {
+        id: Date.now(),
+        type: 'sujet',
+        action: 'Sujet créé',
+        user: 'Admin',
+        timestamp: 'À l\'instant',
+        icon: <FileText className="w-4 h-4" />,
+        color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+      }
+      setRecentActivities(prev => [newActivity, ...prev.slice(0, 5)])
+
+      toast.success('Sujet créé avec succès', {
+        description: `Le sujet "${createdSujet.titre}" a été ajouté.`,
+        icon: <CheckCircle className="w-4 h-4" />,
+        id: toastId
       })
 
-      toast.success('Analyse IA complétée')
-      return analysis
-    } catch (error) {
-      toast.error('Erreur lors de l\'analyse IA')
+      // Fermer le modal et réinitialiser le formulaire
+      setShowCreateModal(false)
+      setNewSujet({
+        titre: '',
+        description: '',
+        keywords: '',
+        domaine: '',
+        niveau: '',
+        faculté: '',
+        problématique: '',
+        méthodologie: '',
+        technologies: '',
+        difficulté: 'moyenne',
+        durée_estimée: '',
+        ressources: ''
+      })
+
+    } catch (error: any) {
+      toast.error('Erreur lors de la création', {
+        description: error?.message || 'Une erreur est survenue.',
+        id: toastId
+      })
+    } finally {
+      setCreateLoading(false)
     }
   }
+
+  // Export avec toast
+  const handleExport = async (type: 'users' | 'sujets') => {
+    const toastId = toast.loading(`Préparation de l'export ${type}...`)
+
+    try {
+      const data = type === 'users' ? users : sujets
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `memoguide_${type}_${new Date().toISOString().split('T')[0]}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+
+      toast.success('Export réussi', {
+        description: `${data.length} ${type === 'users' ? 'utilisateurs' : 'sujets'} exportés.`,
+        id: toastId
+      })
+    } catch (error) {
+      toast.error('Erreur lors de l\'export', {
+        description: 'Veuillez réessayer plus tard.',
+        id: toastId
+      })
+    }
+  }
+
+  // Rafraîchissement avec toast
+  const handleRefresh = () => {
+    fetchDashboardData(true)
+  }
+
+  const systemStatus = stats.systemHealth > 80 ? 'healthy' : stats.systemHealth > 50 ? 'warning' : 'critical'
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[500px] space-y-4 p-4">
+        <AlertCircle className="w-16 h-16 text-red-500" />
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Erreur de chargement</h3>
+        <p className="text-gray-600 dark:text-gray-400 text-center max-w-md">{error}</p>
+        <button
+          onClick={handleRefresh}
+          className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+        >
+          Réessayer
+        </button>
+      </div>
+    )
+  }
+
+  if (loading) return <AdminSkeleton />
 
   // Modal de confirmation
   const ConfirmModal = () => {
     if (!confirmModal) return null
-
-    const getIcon = () => {
-      switch (confirmModal.type) {
-        case 'delete': return <Trash2 className="w-6 h-6 text-red-500" />
-        case 'deactivate': return <UserX className="w-6 h-6 text-yellow-500" />
-        case 'activate': return <UserCheck className="w-6 h-6 text-green-500" />
-        case 'promote': return <ShieldCheck className="w-6 h-6 text-purple-500" />
-        case 'demote': return <ShieldOff className="w-6 h-6 text-blue-500" />
-        case 'reset': return <RefreshCw className="w-6 h-6 text-orange-500" />
-        default: return <AlertCircle className="w-6 h-6 text-gray-500" />
-      }
-    }
-
-    const getButtonColor = () => {
-      switch (confirmModal.type) {
-        case 'delete': return 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
-        case 'deactivate': return 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500'
-        case 'activate': return 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-        case 'promote': return 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500'
-        case 'demote': return 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-        case 'reset': return 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
-        default: return 'bg-gray-600 hover:bg-gray-700 focus:ring-gray-500'
-      }
-    }
 
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -794,17 +1248,18 @@ export default function AdminDashboardPage() {
           className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-700 shadow-2xl"
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
-              {getIcon()}
+            <div className={`p-2 rounded-lg ${confirmModal.type === 'delete' ? 'bg-red-100 dark:bg-red-900/30' :
+                confirmModal.type === 'deactivate' ? 'bg-yellow-100 dark:bg-yellow-900/30' :
+                  'bg-green-100 dark:bg-green-900/30'
+              }`}>
+              {confirmModal.type === 'delete' && <Trash2 className="w-6 h-6 text-red-600" />}
+              {confirmModal.type === 'deactivate' && <UserX className="w-6 h-6 text-yellow-600" />}
+              {confirmModal.type === 'activate' && <UserCheck className="w-6 h-6 text-green-600" />}
             </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-              {confirmModal.title}
-            </h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{confirmModal.title}</h3>
           </div>
 
-          <p className="text-gray-600 dark:text-gray-300 mb-6">
-            {confirmModal.message}
-          </p>
+          <p className="text-gray-600 dark:text-gray-300 mb-6">{confirmModal.message}</p>
 
           <div className="flex gap-3">
             <button
@@ -815,7 +1270,10 @@ export default function AdminDashboardPage() {
             </button>
             <button
               onClick={confirmModal.action}
-              className={`flex-1 px-4 py-2.5 text-white rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 ${getButtonColor()}`}
+              className={`flex-1 px-4 py-2.5 text-white rounded-lg transition-colors font-medium ${confirmModal.type === 'delete' ? 'bg-red-600 hover:bg-red-700' :
+                  confirmModal.type === 'deactivate' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                    'bg-green-600 hover:bg-green-700'
+                }`}
             >
               Confirmer
             </button>
@@ -825,166 +1283,95 @@ export default function AdminDashboardPage() {
     )
   }
 
-  // Modal d'action groupée
-  const BulkActionModal = () => {
-    if (!bulkActionModal) return null
 
-    const itemCount = bulkActionModal.items.length
-    const itemType = bulkActionModal.itemType === 'user' ? 'utilisateur(s)' : 'sujet(s)'
 
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-700"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <AlertTriangle className="w-6 h-6 text-yellow-500" />
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-              Action groupée
-            </h3>
-          </div>
-
-          <p className="text-gray-600 dark:text-gray-300 mb-4">
-            Vous êtes sur le point de {bulkActionModal.type} {itemCount} {itemType}.
-            Cette action est irréversible.
-          </p>
-
-          <div className="mb-6 max-h-32 overflow-y-auto space-y-1">
-            {bulkActionModal.items.slice(0, 5).map((item, index) => (
-              <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded">
-                {bulkActionModal.itemType === 'user' ? (
-                  <>
-                    <Users className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm truncate">
-                      {(item as User).email}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <FileText className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm truncate">
-                      {(item as Sujet).titre.substring(0, 50)}...
-                    </span>
-                  </>
-                )}
-              </div>
-            ))}
-            {itemCount > 5 && (
-              <div className="text-sm text-gray-500 text-center py-2">
-                ... et {itemCount - 5} autres
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => setBulkActionModal(null)}
-              disabled={bulkProcessing}
-              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 font-medium"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={() => handleBulkAction(bulkActionModal.type)}
-              disabled={bulkProcessing}
-              className={`flex-1 px-4 py-2.5 text-white rounded-lg transition-colors flex items-center justify-center gap-2 font-medium ${bulkActionModal.type === 'delete' ? 'bg-red-600 hover:bg-red-700' :
-                  bulkActionModal.type === 'deactivate' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                    'bg-green-600 hover:bg-green-700'
-                } disabled:opacity-50`}
-            >
-              {bulkProcessing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Traitement...
-                </>
-              ) : (
-                bulkActionModal.type === 'delete' ? 'Supprimer' :
-                  bulkActionModal.type === 'deactivate' ? 'Désactiver' : 'Activer'
-              )}
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    )
-  }
-
-  // Rendu principal
   return (
     <div className="space-y-6">
       {/* Modals */}
       <AnimatePresence>
         {confirmModal && <ConfirmModal />}
-        {bulkActionModal && <BulkActionModal />}
+        <CreateSujetModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={(newSujet) => {
+            // Mettre à jour la liste des sujets
+            setSujets(prev => [newSujet, ...prev])
+            // Mettre à jour les stats
+            setStats(prev => ({
+              ...prev,
+              totalSujets: prev.totalSujets + 1,
+              activeSujets: prev.activeSujets + 1
+            }))
+            // Ajouter une activité récente
+            const newActivity: RecentActivity = {
+              id: Date.now(),
+              type: 'sujet',
+              action: 'Sujet créé',
+              user: 'Admin',
+              timestamp: 'À l\'instant',
+              icon: <FileText className="w-4 h-4" />,
+              color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+            }
+            setRecentActivities(prev => [newActivity, ...prev.slice(0, 5)])
+          }}
+        />
       </AnimatePresence>
 
       {/* En-tête */}
-      <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 dark:from-gray-800 dark:via-gray-800 dark:to-gray-800 rounded-2xl p-6 text-white shadow-lg">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-                <Shield className="w-8 h-8" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                <Shield className="w-8 h-8 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold">
-                  Tableau de bord Administrateur
-                </h1>
-                <p className="text-blue-100 dark:text-gray-300 mt-1">
-                  Données réelles de la plateforme MemoBot
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Administration</h1>
+                <p className="text-gray-600 dark:text-gray-400 mt-1">
+                  Gestion de la plateforme MémoGuide
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 mt-4">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-full">
-                <div className={`w-2 h-2 rounded-full ${systemStatus === 'healthy' ? 'bg-green-400' :
-                    systemStatus === 'warning' ? 'bg-yellow-400' : 'bg-red-400'
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                <div className={`w-2 h-2 rounded-full ${systemStatus === 'healthy' ? 'bg-green-500' :
+                    systemStatus === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
                   }`} />
-                <span className="text-sm">
+                <span className="text-sm text-gray-700 dark:text-gray-300">
                   Système {systemStatus === 'healthy' ? 'Opérationnel' :
                     systemStatus === 'warning' ? 'Alerte' : 'Critique'}
                 </span>
               </div>
-              <div className="text-sm opacity-90">
-                Dernière mise à jour: {new Date().toLocaleTimeString('fr-FR')}
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                {new Date().toLocaleString('fr-FR')}
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-2">
-            <button
-              onClick={fetchDashboardData}
-              disabled={loading}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Actualisation...' : 'Actualiser'}
-            </button>
-            <div className="px-4 py-2 bg-red-500/20 text-red-300 rounded-lg border border-red-500/30">
-              <span className="text-sm font-medium">Mode Admin</span>
-            </div>
-          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 text-gray-700 dark:text-gray-300"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Actualiser
+          </button>
         </div>
 
         {/* Navigation */}
-        <div className="flex flex-wrap gap-1.5 mt-6 pt-6 border-t border-white/10">
+        <div className="flex flex-wrap gap-1.5 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
           {[
             { id: 'overview', label: 'Vue d\'ensemble', icon: Activity },
             { id: 'users', label: 'Utilisateurs', icon: Users },
-            { id: 'sujets', label: 'Sujets', icon: FileText },
-            // { id: 'ai', label: 'Intelligence Artificielle', icon: Brain },
-            // { id: 'analytics', label: 'Analytiques', icon: BarChart3 },
-            // { id: 'system', label: 'Système', icon: Settings }
+            { id: 'sujets', label: 'Sujets', icon: FileText }
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setSelectedTab(tab.id as any)}
               className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 text-sm font-medium ${selectedTab === tab.id
-                  ? 'bg-white text-gray-900 shadow-lg'
-                  : 'text-white/90 hover:bg-white/10 hover:text-white'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -999,10 +1386,9 @@ export default function AdminDashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
           className="space-y-6"
         >
-          {/* Statistiques principales */}
+          {/* Stats principales */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between mb-4">
@@ -1019,12 +1405,12 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {stats.activeUsers} actifs
-                  </span>
-                </div>
+                <span className="text-green-600 dark:text-green-400 font-medium">
+                  +{stats.newUsers7d} cette semaine
+                </span>
+                <span className="text-gray-600 dark:text-gray-400">
+                  {stats.activeUsers} actifs
+                </span>
               </div>
             </div>
 
@@ -1043,12 +1429,12 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {sujets.items.filter(s => s.is_active).length} actifs
-                  </span>
-                </div>
+                <span className="text-green-600 dark:text-green-400 font-medium">
+                  +{stats.newSujets7d} cette semaine
+                </span>
+                <span className="text-gray-600 dark:text-gray-400">
+                  {stats.activeSujets} actifs
+                </span>
               </div>
             </div>
 
@@ -1066,20 +1452,15 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-purple-500" />
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {stats.apiCalls} requêtes
-                  </span>
-                </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {Math.round(stats.aiAnalyses / Math.max(stats.totalUsers, 1))} par utilisateur
               </div>
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-xl">
-                  <Zap className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                  <Activity className="w-6 h-6 text-orange-600 dark:text-orange-400" />
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -1090,114 +1471,116 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${stats.systemHealth > 80 ? 'bg-green-500' :
-                      stats.systemHealth > 60 ? 'bg-yellow-500' : 'bg-red-500'
-                    }`} />
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {stats.systemHealth > 80 ? 'Excellent' :
-                      stats.systemHealth > 60 ? 'Bon' : 'À surveiller'}
-                  </span>
-                </div>
-                <div className="text-orange-600 dark:text-orange-400 font-medium">
-                  {stats.storageUsage} Go
-                </div>
+              <div className="flex items-center gap-2 text-sm">
+                <div className={`w-2 h-2 rounded-full ${stats.systemHealth > 80 ? 'bg-green-500' :
+                    stats.systemHealth > 60 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`} />
+                <span className="text-gray-600 dark:text-gray-400">
+                  {stats.systemHealth > 80 ? 'Excellent' :
+                    stats.systemHealth > 60 ? 'Bon' : 'À surveiller'}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Activités récentes et santé système */}
+          {/* Activités récentes et statistiques */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Activités récentes */}
-            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Activity className="w-5 h-5" />
-                  Activités récentes
-                </h3>
-              </div>
+<div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-6">
+    <Activity className="w-5 h-5" />
+    Activités récentes
+  </h3>
 
-              <div className="space-y-3">
-                {recentActivities.length > 0 ? (
-                  recentActivities.map((activity) => (
-                    <div key={activity.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group">
-                      <div className="flex items-center gap-4">
-                        <div className={`p-2.5 rounded-lg ${activity.color}`}>
-                          {activity.icon}
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                            {activity.action}
-                          </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400">{activity.user}</div>
-                        </div>
+  <div className="space-y-3">
+    {recentActivities.length > 0 ? (
+      recentActivities.map((activity) => (
+        <div 
+          key={`activity-${activity.id}`}
+          className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group"
+        >
+          <div className="flex items-center gap-4">
+            <div className={`p-2.5 rounded-lg ${activity.color}`}>
+              {activity.icon}
+            </div>
+            <div>
+              <div className="font-medium text-gray-900 dark:text-white group-hover:text-blue-600">
+                {activity.action}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">{activity.user}</div>
+            </div>
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+            {activity.timestamp}
+          </div>
+        </div>
+      ))
+    ) : (
+      <div key="no-activities" className="text-center py-8">
+        <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+        <p className="text-gray-600 dark:text-gray-400">Aucune activité récente</p>
+      </div>
+    )}
+  </div>
+</div>
+
+            {/* Statistiques des rôles */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Répartition des rôles
+              </h3>
+
+              <div className="space-y-4">
+                {roleStats.length > 0 ? (
+                  roleStats.map((stat) => (
+                    <div key={stat.role}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="capitalize text-gray-700 dark:text-gray-300">
+                          {stat.role === 'admin' ? 'Administrateurs' :
+                            stat.role === 'enseignant' ? 'Enseignants' : 'Étudiants'}
+                        </span>
+                        <span className="font-medium text-gray-900 dark:text-white">{stat.count}</span>
                       </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                        {activity.timestamp}
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full"
+                          style={{ width: `${(stat.count / stats.totalUsers) * 100}%` }}
+                        />
                       </div>
                     </div>
                   ))
                 ) : (
                   <div className="text-center py-8">
-                    <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 dark:text-gray-400">
-                      Aucune activité récente
-                    </p>
+                    <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400">Aucune donnée disponible</p>
                   </div>
                 )}
               </div>
             </div>
+          </div>
 
-            {/* Santé système */}
+          {/* Domaines populaires */}
+          {domainStats.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                <Zap className="w-5 h-5" />
-                Santé système
+                <BarChart3 className="w-5 h-5" />
+                Domaines les plus populaires
               </h3>
 
-              <div className="space-y-4">
-                {[
-                  { label: 'Base de données', status: systemHealth.database, icon: DatabaseIcon },
-                  { label: 'Service IA', status: systemHealth.aiService, icon: Brain },
-                  { label: 'API Backend', status: systemHealth.api, icon: Terminal },
-                  { label: 'Stockage', status: systemHealth.storage, icon: HardDrive },
-                  { label: 'Cache', status: systemHealth.cache, icon: Cloud },
-                  { label: 'Sauvegardes', status: systemHealth.backups, icon: Save }
-                ].map((service) => (
-                  <div key={service.label} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${service.status ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'
-                        }`}>
-                        <service.icon className={`w-4 h-4 ${service.status ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                          }`} />
-                      </div>
-                      <span className="text-gray-700 dark:text-gray-300">{service.label}</span>
-                    </div>
-                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${service.status
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                      }`}>
-                      {service.status ? 'En ligne' : 'Hors ligne'}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {domainStats.slice(0, 4).map((stat) => (
+                  <div key={stat.domaine} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <div className="font-medium text-gray-900 dark:text-white mb-2">{stat.domaine}</div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">{stat.count} sujets</span>
+                      <span className="text-sm text-blue-600 dark:text-blue-400">{stat.avg_views} vues ∅</span>
                     </div>
                   </div>
                 ))}
               </div>
-
-              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Statut global</span>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${systemStatus === 'healthy' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                      systemStatus === 'warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                    }`}>
-                    {systemStatus === 'healthy' ? 'Opérationnel' :
-                      systemStatus === 'warning' ? 'Alerte' : 'Critique'}
-                  </span>
-                </div>
-              </div>
             </div>
-          </div>
+          )}
         </motion.div>
       )}
 
@@ -1206,22 +1589,31 @@ export default function AdminDashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
           className="space-y-6"
         >
-          {/* En-tête avec statistiques */}
+          {/* En-tête */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">Gestion des utilisateurs</h2>
                 <p className="text-gray-600 dark:text-gray-400">
-                  {users.total} utilisateur(s) au total • {stats.activeUsers} actif(s)
+                  {filteredUsers.length} utilisateur(s) • {stats.activeUsers} actif(s)
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleExportData('users')}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors text-gray-700 dark:text-gray-300"
+                >
+                  <Filter className="w-4 h-4" />
+                  Filtres
+                  {(userFilter !== 'all' || searchQuery) && (
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleExport('users')}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors text-gray-700 dark:text-gray-300"
                 >
                   <Download className="w-4 h-4" />
                   Exporter
@@ -1229,102 +1621,43 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Barre de recherche et filtres */}
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="search"
-                  placeholder="Rechercher un utilisateur par email ou nom..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
+            {/* Barre de recherche */}
+            <div className="relative mb-4">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="search"
+                placeholder="Rechercher un utilisateur..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
 
-              <div className="flex gap-2">
+            {/* Filtres */}
+            {showFilters && (
+              <div className="flex flex-wrap gap-2">
                 <select
                   value={userFilter}
                   onChange={(e) => setUserFilter(e.target.value as any)}
-                  className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
                 >
                   <option value="all">Tous les utilisateurs</option>
-                  <option value="active">Actifs seulement</option>
+                  <option value="active">Actifs</option>
                   <option value="inactive">Inactifs</option>
                   <option value="admin">Administrateurs</option>
                   <option value="enseignant">Enseignants</option>
                   <option value="etudiant">Étudiants</option>
                 </select>
               </div>
-            </div>
-
-            {/* Actions groupées */}
-            {selectedUsers.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm font-medium">
-                      {selectedUsers.length} sélectionné(s)
-                    </div>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      Actions groupées disponibles
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setBulkActionModal({
-                        type: 'activate',
-                        items: users.items.filter(u => selectedUsers.includes(u.id)),
-                        itemType: 'user'
-                      })}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm transition-colors"
-                    >
-                      Activer
-                    </button>
-                    <button
-                      onClick={() => setBulkActionModal({
-                        type: 'deactivate',
-                        items: users.items.filter(u => selectedUsers.includes(u.id)),
-                        itemType: 'user'
-                      })}
-                      className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm transition-colors"
-                    >
-                      Désactiver
-                    </button>
-                    <button
-                      onClick={() => setBulkActionModal({
-                        type: 'delete',
-                        items: users.items.filter(u => selectedUsers.includes(u.id)),
-                        itemType: 'user'
-                      })}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm transition-colors"
-                    >
-                      Supprimer
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
             )}
           </div>
 
           {/* Liste des utilisateurs */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                    <th className="text-left py-4 px-6">
-                      <input
-                        type="checkbox"
-                        checked={selectedUsers.length === users.items.length && users.items.length > 0}
-                        onChange={(e) => handleSelectAllUsers(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                      />
-                    </th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
                       Utilisateur
                     </th>
@@ -1335,7 +1668,7 @@ export default function AdminDashboardPage() {
                       Statut
                     </th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Date d'inscription
+                      Inscription
                     </th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
                       Actions
@@ -1343,138 +1676,110 @@ export default function AdminDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {users.items.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                      <td className="py-4 px-6">
-                        <input
-                          type="checkbox"
-                          checked={selectedUsers.includes(user.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedUsers([...selectedUsers, user.id])
-                            } else {
-                              setSelectedUsers(selectedUsers.filter(id => id !== user.id))
-                            }
-                          }}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                        />
-                      </td>
-                      <td className="py-4 px-6">
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white">{user.full_name}</div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400">{user.email}</div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
-                            user.role === 'enseignant' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                              'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                          }`}>
-                          {user.role === 'admin' ? 'Administrateur' :
-                            user.role === 'enseignant' ? 'Enseignant' : 'Étudiant'}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
-                          <span className={`text-sm font-medium ${user.is_active ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {user.is_active ? 'Actif' : 'Inactif'}
+                  {paginatedUsers.map((user) => {
+                    const actionKey = `user-${user.id}`
+                    const isLoading = actionLoading[`user-${user.id}-activate`] ||
+                      actionLoading[`user-${user.id}-deactivate`] ||
+                      actionLoading[`user-${user.id}-delete`]
+
+                    return (
+                      <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="py-4 px-6">
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">{user.full_name}</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400">{user.email}</div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
+                              user.role === 'enseignant' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            }`}>
+                            {user.role === 'admin' ? 'Admin' :
+                              user.role === 'enseignant' ? 'Enseignant' : 'Étudiant'}
                           </span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {new Date(user.created_at).toLocaleDateString('fr-FR', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric'
-                        })}
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => window.open(`/dashboard/profile/${user.id}`, '_blank')}
-                            className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                            title="Voir profil"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setConfirmModal({
-                              title: user.is_active ? 'Désactiver l\'utilisateur' : 'Activer l\'utilisateur',
-                              message: user.is_active
-                                ? `L'utilisateur ${user.email} ne pourra plus se connecter au système.`
-                                : `L'utilisateur ${user.email} pourra à nouveau se connecter au système.`,
-                              action: () => handleUserAction(user.id, user.is_active ? 'deactivate' : 'activate'),
-                              type: user.is_active ? 'deactivate' : 'activate'
-                            })}
-                            className="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
-                            title={user.is_active ? 'Désactiver' : 'Activer'}
-                          >
-                            {user.is_active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                          </button>
-                          <button
-                            onClick={() => setConfirmModal({
-                              title: 'Supprimer l\'utilisateur',
-                              message: `Êtes-vous sûr de vouloir supprimer l'utilisateur ${user.email} ? Cette action est irréversible.`,
-                              action: () => handleUserAction(user.id, 'delete'),
-                              type: 'delete'
-                            })}
-                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                            title="Supprimer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className={`text-sm font-medium ${user.is_active ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {user.is_active ? 'Actif' : 'Inactif'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
+                          {new Date(user.created_at).toLocaleDateString('fr-FR')}
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setConfirmModal({
+                                title: user.is_active ? 'Désactiver l\'utilisateur' : 'Activer l\'utilisateur',
+                                message: user.is_active
+                                  ? `L'utilisateur ${user.email} ne pourra plus se connecter.`
+                                  : `L'utilisateur ${user.email} pourra à nouveau se connecter.`,
+                                action: () => handleUserAction(user.id, user.is_active ? 'deactivate' : 'activate'),
+                                type: user.is_active ? 'deactivate' : 'activate',
+                                itemId: user.id,
+                                itemType: 'user'
+                              })}
+                              disabled={isLoading}
+                              className="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors disabled:opacity-50"
+                              title={user.is_active ? 'Désactiver' : 'Activer'}
+                            >
+                              {isLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : user.is_active ? (
+                                <UserX className="w-4 h-4" />
+                              ) : (
+                                <UserCheck className="w-4 h-4" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => setConfirmModal({
+                                title: 'Supprimer l\'utilisateur',
+                                message: `Êtes-vous sûr de vouloir supprimer ${user.email} ? Cette action est irréversible.`,
+                                action: () => handleUserAction(user.id, 'delete'),
+                                type: 'delete',
+                                itemId: user.id,
+                                itemType: 'user'
+                              })}
+                              disabled={isLoading}
+                              className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Pagination */}
-            {users.totalPages > 1 && (
+            {totalUsersPages > 1 && (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700">
                 <div className="text-sm text-gray-600 dark:text-gray-400 mb-4 sm:mb-0">
-                  {users.total} utilisateur(s) • Page {users.page}/{users.totalPages}
+                  {filteredUsers.length} utilisateur(s) • Page {usersPage}/{totalUsersPages}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleUsersPageChange(users.page - 1)}
-                    disabled={users.page === 1}
-                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => setUsersPage(p => Math.max(1, p - 1))}
+                    disabled={usersPage === 1}
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  {Array.from({ length: Math.min(5, users.totalPages) }, (_, i) => {
-                    let pageNum
-                    if (users.totalPages <= 5) {
-                      pageNum = i + 1
-                    } else if (users.page <= 3) {
-                      pageNum = i + 1
-                    } else if (users.page >= users.totalPages - 2) {
-                      pageNum = users.totalPages - 4 + i
-                    } else {
-                      pageNum = users.page - 2 + i
-                    }
-
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => handleUsersPageChange(pageNum)}
-                        className={`px-3 py-2 rounded-lg transition-colors font-medium ${users.page === pageNum
-                            ? 'bg-blue-600 text-white'
-                            : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                          }`}
-                      >
-                        {pageNum}
-                      </button>
-                    )
-                  })}
+                  <span className="px-4 py-2 bg-blue-600 text-white rounded-lg">
+                    {usersPage}
+                  </span>
                   <button
-                    onClick={() => handleUsersPageChange(users.page + 1)}
-                    disabled={users.page === users.totalPages}
-                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => setUsersPage(p => Math.min(totalUsersPages, p + 1))}
+                    disabled={usersPage === totalUsersPages}
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1482,19 +1787,6 @@ export default function AdminDashboardPage() {
               </div>
             )}
           </div>
-
-          {/* Aucun résultat */}
-          {users.items.length === 0 && (
-            <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-              <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                Aucun utilisateur trouvé
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                Aucun utilisateur ne correspond à vos critères de recherche.
-              </p>
-            </div>
-          )}
         </motion.div>
       )}
 
@@ -1503,22 +1795,38 @@ export default function AdminDashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
           className="space-y-6"
         >
-          {/* En-tête avec statistiques */}
+          {/* En-tête avec bouton de création */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">Gestion des sujets</h2>
                 <p className="text-gray-600 dark:text-gray-400">
-                  {sujets.total} sujet(s) au total • {sujets.items.filter(s => s.is_active).length} actif(s)
+                  {filteredSujets.length} sujet(s) • {stats.activeSujets} actif(s)
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleExportData('sujets')}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Nouveau sujet
+                </button>
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors text-gray-700 dark:text-gray-300"
+                >
+                  <Filter className="w-4 h-4" />
+                  Filtres
+                  {(sujetFilter !== 'all' || searchQuery) && (
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleExport('sujets')}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors text-gray-700 dark:text-gray-300"
                 >
                   <Download className="w-4 h-4" />
                   Exporter
@@ -1526,106 +1834,47 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Barre de recherche et filtres */}
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="search"
-                  placeholder="Rechercher un sujet par titre, description ou mots-clés..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
+            {/* Barre de recherche */}
+            <div className="relative mb-4">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="search"
+                placeholder="Rechercher un sujet..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
 
-              <div className="flex gap-2">
+            {/* Filtres */}
+            {showFilters && (
+              <div className="flex flex-wrap gap-2">
                 <select
                   value={sujetFilter}
                   onChange={(e) => setSujetFilter(e.target.value as any)}
-                  className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
                 >
                   <option value="all">Tous les sujets</option>
-                  <option value="active">Actifs seulement</option>
+                  <option value="active">Actifs</option>
                   <option value="inactive">Inactifs</option>
                   <option value="popular">Populaires (50+ vues)</option>
-                  <option value="recent">Récents (7 derniers jours)</option>
+                  <option value="recent">Récents (7 jours)</option>
                 </select>
               </div>
-            </div>
-
-            {/* Actions groupées */}
-            {selectedSujets.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm font-medium">
-                      {selectedSujets.length} sélectionné(s)
-                    </div>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      Actions groupées disponibles
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setBulkActionModal({
-                        type: 'activate',
-                        items: sujets.items.filter(s => selectedSujets.includes(s.id)),
-                        itemType: 'sujet'
-                      })}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm transition-colors"
-                    >
-                      Activer
-                    </button>
-                    <button
-                      onClick={() => setBulkActionModal({
-                        type: 'deactivate',
-                        items: sujets.items.filter(s => selectedSujets.includes(s.id)),
-                        itemType: 'sujet'
-                      })}
-                      className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm transition-colors"
-                    >
-                      Désactiver
-                    </button>
-                    <button
-                      onClick={() => setBulkActionModal({
-                        type: 'delete',
-                        items: sujets.items.filter(s => selectedSujets.includes(s.id)),
-                        itemType: 'sujet'
-                      })}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm transition-colors"
-                    >
-                      Supprimer
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
             )}
           </div>
 
           {/* Liste des sujets */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                    <th className="text-left py-4 px-6">
-                      <input
-                        type="checkbox"
-                        checked={selectedSujets.length === sujets.items.length && sujets.items.length > 0}
-                        onChange={(e) => handleSelectAllSujets(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                      />
-                    </th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
                       Titre
                     </th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Domaine & Niveau
+                      Domaine
                     </th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
                       Vues / Likes
@@ -1639,157 +1888,123 @@ export default function AdminDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {sujets.items.map((sujet) => (
-                    <tr key={sujet.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                      <td className="py-4 px-6">
-                        <input
-                          type="checkbox"
-                          checked={selectedSujets.includes(sujet.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedSujets([...selectedSujets, sujet.id])
-                            } else {
-                              setSelectedSujets(selectedSujets.filter(id => id !== sujet.id))
-                            }
-                          }}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                        />
-                      </td>
-                      <td className="py-4 px-6">
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white mb-1">
-                            {sujet.titre.length > 60 ? `${sujet.titre.substring(0, 60)}...` : sujet.titre}
+                  {paginatedSujets.map((sujet) => {
+                    const actionKey = `sujet-${sujet.id}`
+                    const isLoading = actionLoading[`sujet-${sujet.id}-activate`] ||
+                      actionLoading[`sujet-${sujet.id}-deactivate`] ||
+                      actionLoading[`sujet-${sujet.id}-delete`]
+
+                    return (
+                      <tr key={sujet.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="py-4 px-6">
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">
+                              {sujet.titre.length > 50 ? `${sujet.titre.substring(0, 50)}...` : sujet.titre}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                              {sujet.description.length > 80 ? `${sujet.description.substring(0, 80)}...` : sujet.description}
+                            </div>
                           </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400">
-                            {sujet.description.length > 80 ? `${sujet.description.substring(0, 80)}...` : sujet.description}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex flex-col gap-1">
-                          <span className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs font-medium rounded-full inline-flex items-center gap-1 w-fit">
-                            <FileText className="w-3 h-3" />
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs font-medium rounded-full">
                             {sujet.domaine}
                           </span>
-                          <span className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 text-xs font-medium rounded-full inline-flex items-center gap-1 w-fit">
-                            <Award className="w-3 h-3" />
-                            {sujet.niveau}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-1">
-                            <Eye className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm font-medium">{sujet.vue_count}</span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1">
+                              <Eye className="w-4 h-4 text-gray-500" />
+                              <span className="text-sm font-medium">{sujet.vue_count}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <ThumbsUp className="w-4 h-4 text-gray-500" />
+                              <span className="text-sm font-medium">{sujet.like_count}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <ThumbsUp className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm font-medium">{sujet.like_count}</span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${sujet.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className={`text-sm font-medium ${sujet.is_active ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {sujet.is_active ? 'Actif' : 'Inactif'}
+                            </span>
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${sujet.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
-                          <span className={`text-sm font-medium ${sujet.is_active ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {sujet.is_active ? 'Actif' : 'Inactif'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => window.open(`/dashboard/sujets/${sujet.id}`, '_blank')}
-                            className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                            title="Voir en détail"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => analyzeSujet(sujet)}
-                            className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                            title="Analyser avec IA"
-                          >
-                            <Brain className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setConfirmModal({
-                              title: sujet.is_active ? 'Désactiver le sujet' : 'Activer le sujet',
-                              message: sujet.is_active
-                                ? `Le sujet "${sujet.titre}" ne sera plus visible par les utilisateurs.`
-                                : `Le sujet "${sujet.titre}" sera à nouveau visible par les utilisateurs.`,
-                              action: () => handleSujetAction(sujet.id, sujet.is_active ? 'deactivate' : 'activate'),
-                              type: sujet.is_active ? 'deactivate' : 'activate'
-                            })}
-                            className="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
-                            title={sujet.is_active ? 'Désactiver' : 'Activer'}
-                          >
-                            {sujet.is_active ? <Archive className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-                          </button>
-                          <button
-                            onClick={() => setConfirmModal({
-                              title: 'Supprimer le sujet',
-                              message: `Êtes-vous sûr de vouloir supprimer le sujet "${sujet.titre}" ? Cette action est irréversible.`,
-                              action: () => handleSujetAction(sujet.id, 'delete'),
-                              type: 'delete'
-                            })}
-                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                            title="Supprimer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/dashboard/sujets/${sujet.id}`}
+                              className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Link>
+                            <button
+                              onClick={() => setConfirmModal({
+                                title: sujet.is_active ? 'Désactiver le sujet' : 'Activer le sujet',
+                                message: sujet.is_active
+                                  ? `Le sujet "${sujet.titre}" ne sera plus visible par les utilisateurs.`
+                                  : `Le sujet "${sujet.titre}" sera à nouveau visible par les utilisateurs.`,
+                                action: () => handleSujetAction(sujet.id, sujet.is_active ? 'deactivate' : 'activate'),
+                                type: sujet.is_active ? 'deactivate' : 'activate',
+                                itemId: sujet.id,
+                                itemType: 'sujet'
+                              })}
+                              disabled={isLoading}
+                              className="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors disabled:opacity-50"
+                              title={sujet.is_active ? 'Désactiver' : 'Activer'}
+                            >
+                              {isLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Archive className="w-4 h-4" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => setConfirmModal({
+                                title: 'Supprimer le sujet',
+                                message: `Êtes-vous sûr de vouloir supprimer "${sujet.titre}" ? Cette action est irréversible.`,
+                                action: () => handleSujetAction(sujet.id, 'delete'),
+                                type: 'delete',
+                                itemId: sujet.id,
+                                itemType: 'sujet'
+                              })}
+                              disabled={isLoading}
+                              className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Pagination */}
-            {sujets.totalPages > 1 && (
+            {totalSujetsPages > 1 && (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700">
                 <div className="text-sm text-gray-600 dark:text-gray-400 mb-4 sm:mb-0">
-                  {sujets.total} sujet(s) • Page {sujets.page}/{sujets.totalPages}
+                  {filteredSujets.length} sujet(s) • Page {sujetsPage}/{totalSujetsPages}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleSujetsPageChange(sujets.page - 1)}
-                    disabled={sujets.page === 1}
-                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => setSujetsPage(p => Math.max(1, p - 1))}
+                    disabled={sujetsPage === 1}
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  {Array.from({ length: Math.min(5, sujets.totalPages) }, (_, i) => {
-                    let pageNum
-                    if (sujets.totalPages <= 5) {
-                      pageNum = i + 1
-                    } else if (sujets.page <= 3) {
-                      pageNum = i + 1
-                    } else if (sujets.page >= sujets.totalPages - 2) {
-                      pageNum = sujets.totalPages - 4 + i
-                    } else {
-                      pageNum = sujets.page - 2 + i
-                    }
-
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => handleSujetsPageChange(pageNum)}
-                        className={`px-3 py-2 rounded-lg transition-colors font-medium ${sujets.page === pageNum
-                            ? 'bg-blue-600 text-white'
-                            : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                          }`}
-                      >
-                        {pageNum}
-                      </button>
-                    )
-                  })}
+                  <span className="px-4 py-2 bg-blue-600 text-white rounded-lg">
+                    {sujetsPage}
+                  </span>
                   <button
-                    onClick={() => handleSujetsPageChange(sujets.page + 1)}
-                    disabled={sujets.page === sujets.totalPages}
-                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => setSujetsPage(p => Math.min(totalSujetsPages, p + 1))}
+                    disabled={sujetsPage === totalSujetsPages}
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1797,333 +2012,7 @@ export default function AdminDashboardPage() {
               </div>
             )}
           </div>
-
-          {/* Aucun résultat */}
-          {sujets.items.length === 0 && (
-            <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-              <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                Aucun sujet trouvé
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                Aucun sujet ne correspond à vos critères de recherche.
-              </p>
-            </div>
-          )}
         </motion.div>
-      )}
-
-      {/* Intelligence Artificielle */}
-      {selectedTab === 'ai' && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-6"
-        >
-          <div className="bg-gradient-to-r from-purple-600 to-pink-600 dark:from-gray-800 dark:to-gray-900 rounded-2xl p-6 text-white">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl font-bold">Intelligence Artificielle</h2>
-                <p className="text-purple-200 dark:text-gray-300 mt-2">
-                  Statut du service IA et configurations
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="px-3 py-1.5 bg-white/20 rounded-lg">
-                  <span className="text-sm font-medium">Status: {systemHealth.aiService ? 'Actif' : 'Inactif'}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
-                <div className="text-3xl font-bold mb-1">{stats.aiAnalyses}</div>
-                <div className="text-sm text-purple-200">Analyses réalisées</div>
-              </div>
-              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
-                <div className="text-3xl font-bold mb-1">{stats.apiCalls}</div>
-                <div className="text-sm text-purple-200">Requêtes API</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <Settings className="w-5 h-5" />
-              Configuration IA
-            </h3>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-white">Service IA</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Statut du moteur d'IA</div>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${systemHealth.aiService
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                  }`}>
-                  {systemHealth.aiService ? 'Actif' : 'Inactif'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-white">Modèle utilisé</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Version du modèle d'IA</div>
-                </div>
-                <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full font-medium">
-                  Gemini 1.5 Pro
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Administration système */}
-      {selectedTab === 'system' && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-6"
-        >
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Paramètres système */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                <Settings className="w-5 h-5 inline mr-2" />
-                Paramètres système
-              </h3>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-gray-900 dark:text-white">Mode maintenance</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Accès restreint aux utilisateurs</div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  </label>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-gray-900 dark:text-white">Nouvelles inscriptions</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Autoriser les nouvelles créations de compte</div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" checked readOnly />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                  </label>
-                </div>
-              </div>
-
-              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <button className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors flex items-center justify-center gap-2 font-medium">
-                  <Save className="w-4 h-4" />
-                  Sauvegarder les paramètres
-                </button>
-              </div>
-            </div>
-
-            {/* Sauvegarde et maintenance */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                <Database className="w-5 h-5 inline mr-2" />
-                Maintenance
-              </h3>
-
-              <div className="space-y-4">
-                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                  <div className="font-medium text-gray-900 dark:text-white mb-3">Tester les services</div>
-                  <div className="space-y-2">
-                    <button
-                      onClick={async () => {
-                        try {
-                          const health = await api.healthCheck()
-                          toast.success(`API Backend: ${health.status}`)
-                        } catch {
-                          toast.error('API Backend hors ligne')
-                        }
-                      }}
-                      className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-between"
-                    >
-                      <span>API Backend</span>
-                      <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs font-medium rounded-full">
-                        Tester
-                      </span>
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const info = await api.getSystemInfo()
-                          toast.success(`Base de données: ${info.database.connected ? 'Connectée' : 'Déconnectée'}`)
-                        } catch {
-                          toast.error('Base de données non accessible')
-                        }
-                      }}
-                      className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-between"
-                    >
-                      <span>Base de données</span>
-                      <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs font-medium rounded-full">
-                        Tester
-                      </span>
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const info = await api.getSystemInfo()
-                          toast.success(`Service IA: ${info.ai.available ? 'Disponible' : 'Indisponible'}`)
-                        } catch {
-                          toast.error('Service IA non accessible')
-                        }
-                      }}
-                      className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-between"
-                    >
-                      <span>Service IA</span>
-                      <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs font-medium rounded-full">
-                        Tester
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions critiques */}
-          <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/10 dark:to-orange-900/10 rounded-2xl border border-red-200 dark:border-red-800 p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-              Actions critiques
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button
-                onClick={() => setConfirmModal({
-                  title: 'Réinitialiser le cache',
-                  message: 'Cette action va vider le cache système. Les performances peuvent être temporairement affectées.',
-                  action: async () => {
-                    try {
-                      await api.clearCache()
-                      toast.success('Cache vidé avec succès')
-                    } catch (error) {
-                      toast.error('Erreur lors du vidage du cache')
-                    }
-                  },
-                  type: 'reset'
-                })}
-                className="p-4 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-red-700 dark:text-red-400 text-left group"
-              >
-                <div className="font-medium mb-1">Vider le cache</div>
-                <div className="text-sm opacity-80">Supprime toutes les données en cache</div>
-              </button>
-              <button
-                onClick={() => handleExportData('sujets')}
-                className="p-4 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-red-700 dark:text-red-400 text-left group"
-              >
-                <div className="font-medium mb-1">Exporter toutes les données</div>
-                <div className="text-sm opacity-80">Backup complet en JSON</div>
-              </button>
-            </div>
-
-            <div className="mt-4 text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4" />
-              Ces actions peuvent affecter le système
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Analytiques */}
-      {selectedTab === 'analytics' && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-6"
-        >
-          <div className="bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-gray-800 dark:to-gray-900 rounded-2xl p-6 text-white">
-            <h2 className="text-2xl font-bold mb-4">Analytiques de la plateforme</h2>
-            <p className="text-blue-200 dark:text-gray-300">
-              Statistiques réelles de la plateforme
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
-                <div className="text-2xl font-bold mb-1">{stats.totalUsers}</div>
-                <div className="text-sm text-blue-200">Utilisateurs totaux</div>
-              </div>
-              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
-                <div className="text-2xl font-bold mb-1">{stats.totalSujets}</div>
-                <div className="text-sm text-blue-200">Sujets créés</div>
-              </div>
-              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
-                <div className="text-2xl font-bold mb-1">{stats.aiAnalyses}</div>
-                <div className="text-sm text-blue-200">Analyses IA</div>
-              </div>
-              <div className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
-                <div className="text-2xl font-bold mb-1">{stats.systemHealth}%</div>
-                <div className="text-sm text-blue-200">Santé système</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Domaines populaires */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Domaines des sujets</h3>
-            <div className="space-y-3">
-              {sujets.items.length > 0 ? (
-                (() => {
-                  const domainCounts: Record<string, number> = {}
-                  sujets.items.forEach(sujet => {
-                    domainCounts[sujet.domaine] = (domainCounts[sujet.domaine] || 0) + 1
-                  })
-
-                  const sortedDomains = Object.entries(domainCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5)
-
-                  return sortedDomains.map(([domaine, count]) => (
-                    <div key={domaine} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                        <span className="font-medium text-gray-900 dark:text-white">{domaine}</span>
-                      </div>
-                      <span className="text-gray-600 dark:text-gray-400 font-medium">{count} sujets</span>
-                    </div>
-                  ))
-                })()
-              ) : (
-                <div className="text-center py-8">
-                  <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Aucune donnée disponible
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Chargement */}
-      {loading && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
-            <div className="flex flex-col items-center">
-              <div className="w-16 h-16 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin mb-4"></div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Chargement...</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-center">
-                Récupération des données
-              </p>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )

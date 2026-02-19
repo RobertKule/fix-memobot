@@ -806,54 +806,7 @@ export default function ProfilePage() {
 
         {/* Colonne droite */}
         <div className="space-y-6">
-          {/* Progression */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <TrendingUp className="w-6 h-6 text-blue-600" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">Progression du profil</h3>
-            </div>
-            
-            <div className="space-y-4">
-              {[
-                { 
-                  label: 'Informations personnelles', 
-                  progress: (profile?.bio && profile?.location) ? 100 : 
-                           (profile?.bio || profile?.location) ? 50 : 0 
-                },
-                { 
-                  label: 'Profil académique', 
-                  progress: (profile?.university && profile?.field && profile?.level) ? 100 :
-                           (profile?.university || profile?.field || profile?.level) ? 33 : 0 
-                },
-                { 
-                  label: 'Centres d\'intérêt', 
-                  progress: profile?.interests ? 100 : 0 
-                },
-                { 
-                  label: 'Compétences', 
-                  progress: skills.length > 0 ? Math.min(100, skills.length * 20) : 0 
-                },
-                { 
-                  label: 'Contact', 
-                  progress: (profile?.phone || profile?.website || profile?.linkedin || profile?.github) ? 100 : 0 
-                },
-              ].map((item, index) => (
-                <div key={index}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-700 dark:text-gray-300">{item.label}</span>
-                    <span className="font-medium text-gray-900 dark:text-white">{item.progress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5">
-                    <div 
-                      className="bg-green-500 h-1.5 rounded-full transition-all duration-500"
-                      style={{ width: `${item.progress}%` }}
-                    ></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
+          
           {/* Conseils */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-800 dark:to-blue-900 rounded-2xl p-6 text-white">
             <div className="flex items-center gap-3 mb-4">

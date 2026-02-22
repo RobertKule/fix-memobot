@@ -561,20 +561,23 @@ class ApiService {
   }
 
   // ========== RECOMMANDATIONS AVANCÉES ==========
-  async getPersonalizedRecommendations(params?: {
-    limit?: number
-    similarity?: 'keywords' | 'domaine' | 'faculty' | 'all'
-  }): Promise<RecommendedSujet[]> {
-    const query = new URLSearchParams()
-    if (params?.limit) query.set('limit', params.limit.toString())
-    if (params?.similarity) query.set('similarity', params.similarity)
 
-    return this.request<RecommendedSujet[]>(
-      `/ai/recommendations/personalized?${query.toString()}`,
-      {},
-      { cacheTTL: 10_000 },
-    )
-  }
+
+async getPersonalizedRecommendations(params?: {
+  limit?: number
+  similarity?: 'keywords' | 'domaine' | 'faculty' | 'all'
+}): Promise<RecommendedSujet[]> {
+  const query = new URLSearchParams()
+  if (params?.limit) query.set('limit', params.limit.toString())
+  if (params?.similarity) query.set('similarity', params.similarity)
+
+  // Changement : utiliser le bon endpoint
+  return this.request<RecommendedSujet[]>(
+    `/recommendations/personalized?${query.toString()}`,
+    {},
+    { cacheTTL: 10_000 },
+  )
+}
 
   async getTrendingSujets(period: 'day' | 'week' | 'month' = 'week'): Promise<Sujet[]> {
     return this.request<Sujet[]>(`/sujets/stats/trending?period=${period}`, {}, { cacheTTL: 10_000 })

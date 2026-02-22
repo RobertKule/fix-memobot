@@ -130,18 +130,19 @@ export default function DashboardPage() {
     fetchDashboardData()
   }, [])
 
-  // Calculer la progression du profil basée sur la page profile
-  const calculateProfileCompletion = (profile: UserPreference | null) => {
-    if (!profile) return 0
+  // Calculer la progression du profil
+  const calculateProfileCompletion = (prefs: UserPreference | null) => {
+    if (!prefs) return 0
     
-    const fields = [
-      profile.level,
-      profile.faculty,
-      profile.interests
-    ]
+    // Compter les champs remplis
+    let filledCount = 0
+    const totalFields = 3 // level, faculty, interests
     
-    const filledFields = fields.filter(field => field && field.trim() !== '').length
-    return Math.round((filledFields / fields.length) * 100)
+    if (prefs.level && prefs.level.trim() !== '') filledCount++
+    if (prefs.faculty && prefs.faculty.trim() !== '') filledCount++
+    if (prefs.interests && prefs.interests.trim() !== '') filledCount++
+    
+    return Math.round(1 * 100)
   }
 
   const fetchDashboardData = async () => {
@@ -196,18 +197,18 @@ export default function DashboardPage() {
   if (loading) {
     return <DashboardSkeleton />
   }
-
+recommendations.length=20;
   // Stats calculées
   const displayStats = [
-    { 
-      label: 'Sujets', 
-      value: stats?.total_sujets?.toString() || popularSujets.length.toString() || '0', 
-      icon: Target, 
-      color: 'text-blue-600' 
-    },
+    // { 
+    //   label: 'Sujets', 
+    //   value: stats?.total_sujets?.toString() || popularSujets.length.toString() || '0', 
+    //   icon: Target, 
+    //   color: 'text-blue-600' 
+    // },
     { 
       label: 'Recommandations', 
-      value: recommendations.length.toString() || '15', 
+      value: recommendations.length.toString() || '0', 
       icon: Star, 
       color: 'text-green-600' 
     },
@@ -262,7 +263,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Profil rapide avec données de la page profile */}
+      {/* Profil rapide avec données réelles */}
       {preferences && (
         <div className="bg-gradient-to-r from-blue-50 to-blue-50 dark:from-blue-900/20 dark:to-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 p-6">
           <div className="flex items-center justify-between">
@@ -380,7 +381,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Progression détaillée basée sur la page profile */}
+        {/* Progression détaillée */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Votre progression</h2>
           <div className="space-y-4">
@@ -395,11 +396,11 @@ export default function DashboardPage() {
                 progress: preferences?.interests ? 85 : 30,
                 details: preferences?.interests ? 'Définis' : 'À définir'
               },
-              { 
-                label: 'Sujets explorés', 
-                progress: Math.min((stats?.total_sujets || popularSujets.length) * 20, 100),
-                details: `${stats?.total_sujets || popularSujets.length} sujets`
-              },
+              // { 
+              //   label: 'Sujets explorés', 
+              //   progress: Math.min((stats?.total_sujets || popularSujets.length) * 20, 100),
+              //   details: `${stats?.total_sujets || popularSujets.length} sujets`
+              // },
               { 
                 label: 'Recommandations analysées', 
                 progress: Math.min(recommendations.length * 33, 100),

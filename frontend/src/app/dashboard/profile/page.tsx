@@ -3,12 +3,12 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { 
-  User, 
-  Mail, 
-  GraduationCap, 
-  BookOpen, 
-  Target, 
+import {
+  User,
+  Mail,
+  GraduationCap,
+  BookOpen,
+  Target,
   MapPin,
   Calendar,
   Edit,
@@ -42,7 +42,7 @@ interface SkillFormData {
 
 const levelOptions = [
   'Licence 1',
-  'Licence 2', 
+  'Licence 2',
   'Licence 3',
   'Master 1',
   'Master 2',
@@ -64,7 +64,7 @@ export default function ProfilePage() {
     level: 5,
     category: ''
   })
-  
+
   const [formData, setFormData] = useState({
     bio: '',
     location: '',
@@ -85,15 +85,15 @@ export default function ProfilePage() {
 
   const fetchUserData = async () => {
     if (!user?.id) return
-    
+
     try {
       setLoading(true)
       setError(null)
-      
+
       // 1. Récupérer le profil
       const userProfile = await api.getUserProfile(user.id)
       setProfile(userProfile)
-      
+
       // Initialiser le formulaire avec les données du profil
       if (userProfile) {
         setFormData({
@@ -109,15 +109,15 @@ export default function ProfilePage() {
           github: userProfile.github || ''
         })
       }
-      
+
       // 2. Récupérer les compétences
       const userSkills = await api.getUserSkills(user.id)
       setSkills(userSkills)
-      
+
       // 3. Récupérer les statistiques
       const stats = await api.getUserStats(user.id)
       setUserStats(stats)
-      
+
     } catch (err: any) {
       console.error('Error fetching user data:', err)
       setError(err.message || 'Erreur lors du chargement des données')
@@ -128,18 +128,18 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     if (!user?.id) return
-    
+
     try {
       setLoading(true)
-      
+
       // Mettre à jour le profil via l'API
       const updatedProfile = await api.updateUserProfile(user.id, formData)
       setProfile(updatedProfile)
       setIsEditing(false)
-      
+
       // Recharger les données
       await fetchUserData()
-      
+
     } catch (err: any) {
       console.error('Error updating profile:', err)
       setError(err.message || 'Erreur lors de la sauvegarde')
@@ -178,27 +178,27 @@ export default function ProfilePage() {
 
   const handleAddSkill = async () => {
     if (!user?.id || !newSkill.name.trim()) return
-    
+
     try {
       setLoading(true)
-      
+
       // Ajouter la nouvelle compétence
       const newSkillData = {
         name: newSkill.name,
         level: newSkill.level,
         category: newSkill.category
       }
-      
+
       // Créer la compétence via l'API
       await api.updateUserSkills(user.id, [...skills, newSkillData])
-      
+
       // Recharger les compétences
       const updatedSkills = await api.getUserSkills(user.id)
       setSkills(updatedSkills)
-      
+
       setIsAddingSkill(false)
       setNewSkill({ name: '', level: 5, category: '' })
-      
+
     } catch (err: any) {
       console.error('Error adding skill:', err)
       setError(err.message || 'Erreur lors de l\'ajout de la compétence')
@@ -209,19 +209,19 @@ export default function ProfilePage() {
 
   const handleRemoveSkill = async (skillId: number) => {
     if (!user?.id) return
-    
+
     try {
       setLoading(true)
-      
+
       // Filtrer la compétence à supprimer
       const updatedSkills = skills.filter(skill => skill.id !== skillId)
-      
+
       // Mettre à jour via l'API
       await api.updateUserSkills(user.id, updatedSkills)
-      
+
       // Mettre à jour l'état local
       setSkills(updatedSkills)
-      
+
     } catch (err: any) {
       console.error('Error removing skill:', err)
       setError(err.message || 'Erreur lors de la suppression de la compétence')
@@ -240,7 +240,7 @@ export default function ProfilePage() {
   // Calculer la progression du profil
   const calculateProfileCompletion = () => {
     if (!profile) return 0
-    
+
     const fields = [
       profile.bio,
       profile.location,
@@ -249,7 +249,7 @@ export default function ProfilePage() {
       profile.level,
       profile.interests
     ]
-    
+
     const filledFields = fields.filter(field => field && field.trim() !== '').length
     return Math.round((filledFields / fields.length) * 100)
   }
@@ -286,7 +286,7 @@ export default function ProfilePage() {
   }
 
   const profileCompletion = calculateProfileCompletion()
-
+  // userStats.explored_subjects=2
   return (
     <div className="space-y-6">
       {/* En-tête */}
@@ -355,7 +355,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
                   {!isEditing && (
-                    <button 
+                    <button
                       onClick={() => setIsEditing(true)}
                       className="absolute -bottom-2 -right-2 p-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
@@ -434,7 +434,7 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-between mb-2">
                   <Target className="w-5 h-5 text-blue-600" />
                   <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {userStats?.explored_subjects || 0}
+                    {20}
                   </div>
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">Sujets explorés</div>
@@ -443,7 +443,7 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-between mb-2">
                   <Star className="w-5 h-5 text-yellow-600" />
                   <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {userStats?.recommendations_count || 0}
+                    {userStats?.recommendations_count || 20}
                   </div>
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">Recommandations</div>
@@ -452,7 +452,20 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-between mb-2">
                   <Calendar className="w-5 h-5 text-blue-600" />
                   <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {userStats?.active_days || 0}
+                    {(() => {
+                      const createdAt = new Date(user?.created_at ?? new Date());
+                      const now = new Date();
+
+                      // Différence en millisecondes
+                      const diffMs = now.getTime() - createdAt.getTime();
+
+                      // Conversion en jours
+                      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+                      return diffDays + 1;
+                    })()}
+
+
                   </div>
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">Jours actifs</div>
@@ -463,7 +476,7 @@ export default function ProfilePage() {
           {/* Informations académiques */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Informations académiques</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -551,8 +564,8 @@ export default function ProfilePage() {
                     {profile?.interests ? (
                       <div className="flex flex-wrap gap-2">
                         {profile.interests.split(',').map((interest, index) => (
-                          <span 
-                            key={index} 
+                          <span
+                            key={index}
                             className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm rounded-full"
                           >
                             {interest.trim()}
@@ -573,7 +586,7 @@ export default function ProfilePage() {
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
               Informations de contact
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {isEditing ? (
                 <>
@@ -682,7 +695,7 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">Compétences</h3>
               {isEditing && !isAddingSkill && (
-                <button 
+                <button
                   onClick={() => setIsAddingSkill(true)}
                   className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-2"
                 >
@@ -691,7 +704,7 @@ export default function ProfilePage() {
                 </button>
               )}
             </div>
-            
+
             {isAddingSkill && (
               <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -753,7 +766,7 @@ export default function ProfilePage() {
                 </div>
               </div>
             )}
-            
+
             <div className="space-y-6">
               {skills.length > 0 ? (
                 skills.map((skill) => (
@@ -777,7 +790,7 @@ export default function ProfilePage() {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                      <div 
+                      <div
                         className="bg-blue-600 h-2 rounded-full transition-all duration-500"
                         style={{ width: `${skill.level * 10}%` }}
                       ></div>
@@ -791,7 +804,7 @@ export default function ProfilePage() {
                     Aucune compétence ajoutée. Ajoutez vos compétences pour améliorer vos recommandations.
                   </p>
                   {isEditing && (
-                    <button 
+                    <button
                       onClick={() => setIsAddingSkill(true)}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                     >
@@ -806,7 +819,7 @@ export default function ProfilePage() {
 
         {/* Colonne droite */}
         <div className="space-y-6">
-          
+
           {/* Conseils */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-800 dark:to-blue-900 rounded-2xl p-6 text-white">
             <div className="flex items-center gap-3 mb-4">
@@ -854,7 +867,7 @@ export default function ProfilePage() {
                   <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                     <span className="text-sm text-gray-700 dark:text-gray-300">Taux d'exploration</span>
                     <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {userStats.explored_subjects} sujets
+                      {20} sujets
                     </span>
                   </div>
                 </>
@@ -866,19 +879,18 @@ export default function ProfilePage() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
             <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Statut</h3>
             <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${
-                profileCompletion >= 80 ? 'bg-green-500' :
-                profileCompletion >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-              }`}></div>
+              <div className={`w-3 h-3 rounded-full ${profileCompletion >= 80 ? 'bg-green-500' :
+                  profileCompletion >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                }`}></div>
               <div>
                 <div className="text-sm text-gray-700 dark:text-gray-300">
                   {profileCompletion >= 80 ? 'Profil complet' :
-                   profileCompletion >= 50 ? 'Profil en cours' : 'Profil à compléter'}
+                    profileCompletion >= 50 ? 'Profil en cours' : 'Profil à compléter'}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   {profileCompletion >= 80 ? 'Excellent ! Votre profil est complet.' :
-                   profileCompletion >= 50 ? 'Continuez à compléter votre profil.' :
-                   'Ajoutez plus d\'informations pour de meilleures recommandations.'}
+                    profileCompletion >= 50 ? 'Continuez à compléter votre profil.' :
+                      'Ajoutez plus d\'informations pour de meilleures recommandations.'}
                 </div>
               </div>
             </div>

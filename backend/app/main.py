@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routes import auth, sujets, users, ai, settings, stats,admin
+from app.routes import auth, sujets, users, ai, settings, stats,admin,recommendation
 from app.llm_service import build_sujets_vectorstore  # initialisation Chroma
 from dotenv import load_dotenv
 load_dotenv()
@@ -58,6 +58,8 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(sujets.router, prefix="/api/v1/sujets", tags=["sujets"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
+app.include_router(recommendation.router, prefix="/api/v1", tags=["recommendations"])
+
 app.include_router(ai.router, prefix="/api/v1/ai", tags=["ai"])
 app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"])
 app.include_router(stats.router, prefix="/api/v1") 

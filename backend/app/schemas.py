@@ -455,3 +455,5 @@ class ResetConversationResponse(BaseModel):
     success: bool
     message: str
     deleted_count: int
+
+UserPreference = UserPreferenceResponse

@@ -587,7 +587,6 @@ async def analyze_subject(
             ]
         }
 
-# app/routes/ai.py - Version corrigée de generate_subjects_from_conversation
 
 @router.post("/generate-from-conversation", response_model=schemas.AIGeneratedSubjects)
 async def generate_subjects_from_conversation(
@@ -598,226 +597,287 @@ async def generate_subjects_from_conversation(
     try:
         # 1️⃣ Récupérer l'historique de conversation
         conversation_history = crud.get_conversation_history(
-            db, current_user.id, limit=15
+            db, current_user.id, limit=20
         )
 
-        if not conversation_history:
+        if not conversation_history or len(conversation_history) < 4:
             raise HTTPException(
                 status_code=400,
-                detail="Pas assez de conversation pour générer des sujets"
+                detail="Pas assez de conversation. Discutez un peu plus avec MemoBot pour qu'il puisse comprendre votre profil."
             )
 
-        # 2️⃣ Transformer l'historique en texte
-        history_text = "\n".join([
-            f"{msg.role}: {msg.content}"
-            for msg in reversed(conversation_history)
-        ])
+        # 2️⃣ Analyser la conversation pour extraire les informations clés
+        messages_list = [
+            {"role": msg.role, "content": msg.content}
+            for msg in conversation_history
+        ]
+        
+        # Utiliser l'analyse experte
+        analyse = analyser_conversation_expert(messages_list)
+        print(f"🔍 Analyse conversation: {analyse}")
+        
+        # Extraire les informations de l'analyse
+        elements = analyse.get("elements_identifies", {})
+        
+        # 3️⃣ Construire le contexte de conversation détaillé
+        user_messages = [msg for msg in conversation_history if msg.role == "user"]
+        assistant_messages = [msg for msg in conversation_history if msg.role == "assistant"]
+        
+        # Créer un résumé de la conversation
+        conversation_summary = ""
+        
+        # Ajouter le dernier échange important
+        if len(user_messages) >= 2:
+            recent_exchange = f"""
+Derniers échanges:
+- Étudiant: {user_messages[-1].content}
+- MemoBot: {assistant_messages[-1].content if assistant_messages else "..."}
 
-        # 3️⃣ Construire les paramètres à partir des préférences
+Ce que l'étudiant a mentionné plus tôt:
+- {user_messages[-2].content if len(user_messages) >= 2 else ""}
+"""
+            conversation_summary += recent_exchange
+        
+        # Ajouter les technologies/intérêts détectés
+        if elements.get("technologies"):
+            conversation_summary += f"\nTechnologies mentionnées: {', '.join(elements['technologies'])}"
+        
+        if elements.get("centres_interet"):
+            conversation_summary += f"\nCentres d'intérêt: {', '.join(elements['centres_interet'])}"
+        
+        # 4️⃣ Récupérer les préférences (fallback)
         preference = crud.get_or_create_preference(db, current_user.id)
         
-        # Valeurs par défaut sécurisées
-        default_domaine = "Génie Informatique"
-        default_niveau = "M2"
-        default_faculté = "Génie Informatique"
-        default_interests = []
+        # 5️⃣ Construire les paramètres avec les infos de la conversation
+        domaine = elements.get("departement") or (preference.faculty if preference else "Génie Informatique")
+        niveau = elements.get("niveau") or (preference.level if preference else "M2")
         
-        if preference:
-            if preference.interests:
-                if isinstance(preference.interests, str):
-                    default_interests = [i.strip() for i in preference.interests.split(',') if i.strip()]
-                else:
-                    default_interests = preference.interests
-            default_domaine = preference.faculty or default_domaine
-            default_niveau = preference.level or default_niveau
-            default_faculté = preference.faculty or default_faculté
+        # Extraire les intérêts de la conversation
+        interests = []
         
-        params = {
-            "interests": default_interests,
-            "domaine": default_domaine,
-            "niveau": default_niveau,
-            "faculté": default_faculté,
-            "conversation_context": history_text
+        # Des mots-clés par département pour enrichir les intérêts
+        dept_keywords = {
+            "Génie Informatique": ["programmation", "développement", "web", "mobile", "ia", "data", "réseau", "sécurité", "base de données", "algorithmes"],
+            "Génie Civil": ["construction", "bâtiment", "structure", "béton", "matériaux", "pont", "route", "hydraulique", "géotechnique"],
+            "Génie Électrique": ["circuit", "moteur", "énergie", "réseau électrique", "automatisme", "puissance", "installation"],
+            "Génie Électronique": ["circuit imprimé", "microcontrôleur", "arduino", "capteur", "signal", "télécommunication", "embarqué"],
+            "Génie Mécanique": ["conception", "fabrication", "mécanisme", "pièce", "usinage", "thermique", "fluide"]
         }
-
-        print(f"📝 Paramètres pour génération: {params}")
-
-        # 4️⃣ Générer les sujets avec LLM
-        generated_subjects = générer_sujets_llm(params, 3)
-        print(f"📝 Sujets générés bruts: {generated_subjects}")
-
-        # 5️⃣ Créer un session_id
+        
+        # Ajouter les intérêts depuis la conversation
+        for msg in user_messages:
+            msg_lower = msg.content.lower()
+            # Chercher des mots-clés pertinents
+            if domaine and domaine in dept_keywords:
+                for kw in dept_keywords[domaine]:
+                    if kw in msg_lower and kw not in interests:
+                        interests.append(kw)
+            
+            # Chercher des technologies spécifiques
+            tech_keywords = ["python", "java", "javascript", "react", "django", "flask", "tensorflow", 
+                           "pytorch", "docker", "git", "sql", "nosql", "mongodb", "postgresql",
+                           "arduino", "raspberry", "matlab", "simulink", "solidworks", "autocad"]
+            for tech in tech_keywords:
+                if tech in msg_lower and tech not in interests:
+                    interests.append(tech)
+        
+        # Si pas d'intérêts trouvés, utiliser les préférences
+        if not interests and preference and preference.interests:
+            if isinstance(preference.interests, str):
+                interests = [i.strip() for i in preference.interests.split(',') if i.strip()]
+        
+        # Limiter à 5 intérêts max
+        interests = interests[:5]
+        
+        print(f"📊 Domaine détecté: {domaine}")
+        print(f"📊 Niveau détecté: {niveau}")
+        print(f"📊 Intérêts détectés: {interests}")
+        
+        # 6️⃣ Appeler le LLM avec le contexte de conversation
+        prompt = f"""
+        En tant qu'expert en encadrement de mémoires à la Faculté des Sciences de l'Ingénieur,
+        génère 3 sujets de mémoire personnalisés pour cet étudiant.
+        
+        **CONTEXTE DE LA CONVERSATION:**
+        {conversation_summary}
+        
+        **PROFIL EXTRAIT:**
+        - Département: {domaine}
+        - Niveau: {niveau}
+        - Intérêts détectés: {', '.join(interests) if interests else 'Non spécifiés mais à déduire du contexte'}
+        
+        **INSTRUCTIONS:**
+        1. Les sujets doivent être ORIGINAUX et adaptés au niveau {niveau}
+        2. Ils doivent correspondre au domaine {domaine}
+        3. Ils doivent refléter les intérêts spécifiques mentionnés dans la conversation
+        4. Pour chaque sujet, fournis:
+           - Un titre accrocheur et précis
+           - Une description détaillée (2-3 phrases)
+           - Une problématique claire sous forme de question
+           - Des mots-clés pertinents (séparés par des virgules)
+           - Une méthodologie suggérée
+           - Une difficulté (facile/moyenne/difficile)
+           - Une durée estimée réaliste
+        
+        **FORMAT DE RÉPONSE (JSON uniquement):**
+        [
+          {{
+            "titre": "Titre du sujet 1",
+            "description": "Description détaillée...",
+            "problématique": "Question de recherche...",
+            "keywords": "mot-clé1, mot-clé2, mot-clé3",
+            "domaine": "{domaine}",
+            "niveau": "{niveau}",
+            "faculté": "{domaine}",
+            "difficulté": "moyenne",
+            "durée_estimée": "6 mois",
+            "methodologie": "Approche méthodologique..."
+          }},
+          ...
+        ]
+        
+        Assure-toi que les sujets sont PERSONNALISÉS et NON GÉNÉRIQUES.
+        """
+        
+        # Appeler le LLM
+        from app.llm_service import llm
+        if llm:
+            try:
+                response = llm.invoke(prompt)
+                reponse_text = response.content if hasattr(response, 'content') else str(response)
+                
+                # Extraire le JSON
+                import json
+                import re
+                json_match = re.search(r'\[.*\]', reponse_text, re.DOTALL)
+                if json_match:
+                    generated_subjects = json.loads(json_match.group())
+                    print(f"✅ Sujets générés par LLM: {len(generated_subjects)}")
+                else:
+                    print("⚠️ Pas de JSON valide dans la réponse LLM")
+                    generated_subjects = []
+            except Exception as e:
+                print(f"⚠️ Erreur appel LLM: {e}")
+                generated_subjects = []
+        else:
+            print("⚠️ LLM non disponible")
+            generated_subjects = []
+        
+        # Si pas de sujets générés, utiliser le fallback intelligent
+        if not generated_subjects or len(generated_subjects) < 3:
+            print("⚠️ Utilisation du fallback intelligent")
+            generated_subjects = generate_intelligent_fallback(domaine, niveau, interests, conversation_summary)
+        
+        # 7️⃣ Créer un session_id
         import uuid
         session_id = str(uuid.uuid4())
-
-        # 6️⃣ Formater les sujets pour correspondre au schéma (AVEC GESTION DES None)
+        
+        # 8️⃣ Formater les sujets
         formatted_subjects = []
-        for i, subject in enumerate(generated_subjects):
-            # S'assurer que tous les champs sont des chaînes, jamais None
-            titre = subject.get("titre", f"Sujet {i+1}")
-            if titre is None:
-                titre = f"Sujet {i+1}"
-            
-            description = subject.get("description", "")
-            if description is None:
-                description = ""
-            
-            # Gérer problématique (peut être sous différentes clés)
-            problematique = subject.get("problématique") or subject.get("problematique") or ""
-            if problematique is None:
-                problematique = ""
-            
-            # Gérer keywords (peut être liste ou string)
-            keywords = subject.get("keywords", "")
-            if keywords is None:
-                keywords = ""
-            elif isinstance(keywords, list):
-                keywords = ", ".join(keywords)
-            
-            # Domaine (jamais None)
-            domaine = subject.get("domaine") or params.get("domaine") or "Génie Informatique"
-            if domaine is None:
-                domaine = "Génie Informatique"
-            
-            # Niveau (jamais None)
-            niveau = subject.get("niveau") or params.get("niveau") or "M2"
-            if niveau is None:
-                niveau = "M2"
-            
-            # CRITIQUE: faculté ne doit JAMAIS être None
-            faculté = subject.get("faculté") or params.get("faculté") or "Génie Informatique"
-            if faculté is None:
-                faculté = "Génie Informatique"  # Valeur par défaut absolue
-            
-            # Difficulté normalisée
-            difficulté = subject.get("difficulté", "moyenne")
-            if difficulté is None:
-                difficulté = "moyenne"
-            elif isinstance(difficulté, str):
-                difficulté = difficulté.lower()
-                if difficulté not in ["facile", "moyenne", "difficile"]:
-                    difficulté = "moyenne"
-            else:
-                difficulté = "moyenne"
-            
-            # Durée estimée
-            durée_estimée = subject.get("durée_estimée", "6 mois")
-            if durée_estimée is None:
-                durée_estimée = "6 mois"
-            
-            # Méthodologie
-            methodologie = subject.get("methodologie") or subject.get("méthodologie") or ""
-            if methodologie is None:
-                methodologie = ""
-            
+        for i, subject in enumerate(generated_subjects[:3]):
+            # S'assurer que tous les champs sont des chaînes
             formatted_subject = {
                 "session_id": session_id,
                 "index": i,
-                "titre": str(titre),
-                "description": str(description),
-                "problématique": str(problematique),
-                "keywords": str(keywords),
-                "domaine": str(domaine),
-                "niveau": str(niveau),
-                "faculté": str(faculté),  # MAINTENANT C'EST TOUJOURS UNE CHAÎNE
-                "difficulté": str(difficulté),
-                "durée_estimée": str(durée_estimée),
-                "methodologie": str(methodologie),
-                "generated_at": subject.get("generated_at") or datetime.utcnow().isoformat(),
-                "original": subject.get("original", True)
+                "titre": str(subject.get("titre", f"Sujet {i+1}")),
+                "description": str(subject.get("description", "")),
+                "problématique": str(subject.get("problématique") or subject.get("problematique", "")),
+                "keywords": str(subject.get("keywords", "")),
+                "domaine": str(subject.get("domaine", domaine)),
+                "niveau": str(subject.get("niveau", niveau)),
+                "faculté": str(subject.get("faculté", domaine)),
+                "difficulté": str(subject.get("difficulté", "moyenne")),
+                "durée_estimée": str(subject.get("durée_estimée", "6 mois")),
+                "methodologie": str(subject.get("methodologie") or subject.get("méthodologie", "")),
+                "generated_at": datetime.utcnow().isoformat(),
+                "original": True
             }
-            
-            # Vérification avant ajout
-            print(f"✅ Sujet {i} formaté - faculté: '{formatted_subject['faculté']}' (type: {type(formatted_subject['faculté']).__name__})")
             formatted_subjects.append(formatted_subject)
-
-        # 7️⃣ Sauvegarder dans l'historique
+        
+        # 9️⃣ Sauvegarder dans l'historique
         history_data = schemas.UserHistoryCreate(
             user_id=current_user.id,
             action="generated_from_conversation",
-            details=f"Généré 3 sujets basés sur une conversation de {len(conversation_history)} messages",
+            details=f"Généré 3 sujets basés sur conversation: {domaine}, {niveau}, {', '.join(interests[:2])}...",
             metadata={
                 "session_id": session_id,
-                "subject_count": len(formatted_subjects)
+                "domaine": domaine,
+                "niveau": niveau,
+                "interests": interests
             }
         )
         crud.create_user_history(db, history_data)
-
-        # 8️⃣ Retourner la réponse
+        
+        # 🔟 Retourner la réponse
         return {
             "session_id": session_id,
             "subjects": formatted_subjects,
             "count": len(formatted_subjects),
-            "message": f"3 sujets générés basés sur notre conversation ({len(conversation_history)} échanges)"
+            "message": f"3 sujets générés basés sur notre conversation (Domaine: {domaine}, Niveau: {niveau})"
         }
-
+        
     except Exception as e:
         print(f"❌ Erreur dans generate_from_conversation: {e}")
         import traceback
         traceback.print_exc()
-        
-        # En cas d'erreur, retourner des sujets par défaut plutôt qu'une erreur 500
-        import uuid
-        session_id = str(uuid.uuid4())
-        
-        # Sujets par défaut pour le fallback
-        default_subjects = [
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la génération: {str(e)}"
+        )
+
+def generate_intelligent_fallback(domaine, niveau, interests, conversation_context):
+    """Génère des sujets intelligents basés sur le contexte même sans LLM"""
+    sujets = []
+    
+    # Sujets par domaine avec personnalisation
+    domain_subjects = {
+        "Génie Informatique": [
             {
-                "session_id": session_id,
-                "index": 0,
-                "titre": "Développement d'une application web pour la gestion de projets académiques",
-                "description": "Concevoir une plateforme collaborative pour le suivi des projets étudiants.",
-                "problématique": "Comment faciliter le suivi des projets académiques ?",
-                "keywords": "react, django, web, base de données",
-                "domaine": "Génie Informatique",
-                "niveau": "M2",
-                "faculté": "Génie Informatique",
-                "difficulté": "moyenne",
-                "durée_estimée": "6 mois",
-                "methodologie": "Analyse des besoins, conception, développement, tests",
-                "generated_at": datetime.utcnow().isoformat(),
-                "original": True
+                "titre": f"Développement d'une application {interests[0] if interests else 'intelligente'} pour {conversation_context[:50] if conversation_context else 'la gestion académique'}",
+                "description": f"Concevoir une application innovante qui répond aux besoins spécifiques exprimés dans votre projet.",
+                "problématique": f"Comment développer une solution {interests[0] if interests else 'informatique'} adaptée aux contraintes identifiées ?",
+                "keywords": f"{', '.join(interests[:3]) if interests else 'développement, application, innovation'}",
+                "methodologie": "Analyse des besoins, conception UML, développement agile, tests utilisateurs"
             },
             {
-                "session_id": session_id,
-                "index": 1,
-                "titre": "Système de recommandation de sujets de mémoire par machine learning",
-                "description": "Développer un algorithme qui suggère des sujets adaptés au profil.",
-                "problématique": "Comment personnaliser les recommandations de sujets ?",
-                "keywords": "machine learning, python, recommandation",
-                "domaine": "Génie Informatique",
-                "niveau": "M2",
-                "faculté": "Génie Informatique",
-                "difficulté": "difficile",
-                "durée_estimée": "8 mois",
-                "methodologie": "Collecte de données, modélisation, entraînement, évaluation",
-                "generated_at": datetime.utcnow().isoformat(),
-                "original": True
+                "titre": f"Analyse et implémentation d'un système de {interests[1] if len(interests) > 1 else 'recommandation'} basé sur l'IA",
+                "description": "Explorer les possibilités offertes par l'intelligence artificielle pour résoudre une problématique spécifique.",
+                "problématique": f"Comment l'IA peut-elle améliorer {interests[0] if interests else 'les processus existants'} ?",
+                "keywords": f"IA, machine learning, {', '.join(interests[:2]) if interests else 'algorithmes, données'}",
+                "methodologie": "Revue littérature, collecte données, modélisation, entraînement, évaluation"
             },
             {
-                "session_id": session_id,
-                "index": 2,
-                "titre": "Analyse de l'impact de l'intelligence artificielle sur l'éducation",
-                "description": "Étudier comment l'IA transforme les méthodes d'enseignement et d'apprentissage.",
-                "problématique": "Quel est l'impact réel de l'IA sur la qualité de l'éducation ?",
-                "keywords": "IA, éducation, machine learning, pédagogie",
-                "domaine": "Génie Informatique",
-                "niveau": "M2",
-                "faculté": "Génie Informatique",
-                "difficulté": "moyenne",
-                "durée_estimée": "6 mois",
-                "methodologie": "Revue de littérature, enquêtes, analyse comparative",
-                "generated_at": datetime.utcnow().isoformat(),
-                "original": True
+                "titre": f"Étude comparative des approches de {interests[2] if len(interests) > 2 else 'sécurisation'} des systèmes d'information",
+                "description": "Comparer différentes méthodes pour améliorer la sécurité et la performance des systèmes actuels.",
+                "problématique": f"Quelle approche de {interests[0] if interests else 'sécurité'} est la plus adaptée au contexte ?",
+                "keywords": f"sécurité, analyse, {', '.join(interests[:2]) if interests else 'performance, évaluation'}",
+                "methodologie": "Analyse comparative, métriques d'évaluation, tests de performance"
+            }
+        ],
+        "Génie Civil": [
+            {
+                "titre": f"Analyse des matériaux {interests[0] if interests else 'écologiques'} pour la construction durable",
+                "description": "Étudier les propriétés et performances des nouveaux matériaux durables dans le contexte local.",
+                "problématique": f"Quels matériaux alternatifs pour une construction {interests[0] if interests else 'durable'} ?",
+                "keywords": f"matériaux, construction, {', '.join(interests[:2]) if interests else 'durabilité, écologie'}",
+                "methodologie": "Étude expérimentale, tests laboratoire, analyse comparative"
             }
         ]
-        
-        return {
-            "session_id": session_id,
-            "subjects": default_subjects,
-            "count": 3,
-            "message": "3 sujets générés (mode secours)"
-        }
+    }
+    
+    # Prendre les sujets du domaine ou utiliser un fallback
+    sujet_templates = domain_subjects.get(domaine, domain_subjects["Génie Informatique"])
+    
+    for i, template in enumerate(sujet_templates[:3]):
+        sujet = template.copy()
+        sujet["domaine"] = domaine
+        sujet["niveau"] = niveau
+        sujet["faculté"] = domaine
+        sujet["difficulté"] = "moyenne"
+        sujet["durée_estimée"] = "6 mois"
+        sujets.append(sujet)
+    
+    return sujets
           
 # Route publique pour le chat sans authentification
 @router.post("/ask-public", response_model=schemas.AIResponse)

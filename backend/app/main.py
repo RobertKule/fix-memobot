@@ -44,6 +44,8 @@ app.add_middleware(
         "https://memobot-frontend.vercel.app",
         "https://memobot-yh22.onrender.com",
         "https://fix-memobot.vercel.app",
+        "https://memobot-happy.vercel.app/",
+        "https://memobot-ai.vercel.app/"
         # "*"  # Temporaire pour le développement
     ],
     allow_credentials=True,

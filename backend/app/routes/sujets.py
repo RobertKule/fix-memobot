@@ -234,8 +234,6 @@ async def get_recent_sujets(
         )
 
 # ========== RECOMMANDATIONS IA ==========
-# app/routes/sujets.py - Version corrigée de la route /recommend
-
 @router.post("/recommend", response_model=List[schemas.RecommendedSujet])
 async def recommend_sujets(
     request: schemas.RecommendationRequest,
@@ -248,23 +246,29 @@ async def recommend_sujets(
         
         # ===== 1. RÉCUPÉRER LE PROFIL COMPLET DE L'UTILISATEUR =====
         user_profile = None
-        user_preferences = None
         
-        # Essayer de récupérer depuis user_profiles
+        # Essayer de récupérer depuis user_profiles (qui existe probablement)
         try:
             from app.models import UserProfile
             user_profile = db.query(UserProfile).filter(
                 UserProfile.user_id == current_user.id
             ).first()
+            if user_profile:
+                print(f"✅ Profil utilisateur trouvé dans UserProfile")
         except Exception as e:
-            print(f"⚠️ Erreur récupération profile: {e}")
+            print(f"⚠️ UserProfile non disponible: {e}")
         
-        # Essayer de récupérer depuis user_preferences
+        # Essayer de récupérer depuis user_preferences (optionnel)
+        user_preferences = None
         try:
             from app.models import UserPreferences
             user_preferences = db.query(UserPreferences).filter(
                 UserPreferences.user_id == current_user.id
             ).first()
+            if user_preferences:
+                print(f"✅ Préférences utilisateur trouvées dans UserPreferences")
+        except ImportError:
+            print("ℹ️ Table UserPreferences non définie - ignoré")
         except Exception as e:
             print(f"⚠️ Erreur récupération préférences: {e}")
         
@@ -277,47 +281,49 @@ async def recommend_sujets(
         # Priorité 1: Request explicite
         if request.faculté:
             user_faculty = request.faculté
-        elif request.domaine:
+        if request.domaine:
             user_field = request.domaine
-        
-        # Priorité 2: User profile
-        if not user_faculty and user_profile and hasattr(user_profile, 'field'):
-            user_field = user_profile.field
-            # Déduire la faculté du domaine
-            if user_field:
-                if "informatique" in user_field.lower() or "info" in user_field.lower():
-                    user_faculty = "Génie Informatique"
-                elif "civil" in user_field.lower():
-                    user_faculty = "Génie Civil"
-                elif "electrique" in user_field.lower() or "électrique" in user_field.lower():
-                    user_faculty = "Génie Électrique"
-                elif "electronique" in user_field.lower() or "électronique" in user_field.lower():
-                    user_faculty = "Génie Électronique"
-                elif "mecanique" in user_field.lower() or "mécanique" in user_field.lower():
-                    user_faculty = "Génie Mécanique"
-        
-        # Priorité 3: User preferences
-        if not user_faculty and user_preferences and hasattr(user_preferences, 'faculty'):
-            user_faculty = user_preferences.faculty
-        
-        if not user_field and user_preferences and hasattr(user_preferences, 'field'):
-            user_field = user_preferences.field
-        
-        # Niveau
         if request.niveau:
             user_level = request.niveau
-        elif user_profile and hasattr(user_profile, 'level'):
-            user_level = user_profile.level
-        elif user_preferences and hasattr(user_preferences, 'level'):
-            user_level = user_preferences.level
-        
-        # Intérêts
         if request.interests:
             user_interests = request.interests
-        elif user_profile and hasattr(user_profile, 'interests') and user_profile.interests:
+        
+        # Priorité 2: User profile (si pas déjà définis par la requête)
+        if not user_faculty and user_profile:
+            if hasattr(user_profile, 'field') and user_profile.field:
+                user_field = user_profile.field
+                # Déduire la faculté du domaine
+                if user_field:
+                    field_lower = user_field.lower()
+                    if "info" in field_lower:
+                        user_faculty = "Génie Informatique"
+                    elif "civil" in field_lower:
+                        user_faculty = "Génie Civil"
+                    elif "electrique" in field_lower or "électrique" in field_lower:
+                        user_faculty = "Génie Électrique"
+                    elif "electronique" in field_lower or "électronique" in field_lower:
+                        user_faculty = "Génie Électronique"
+                    elif "mecanique" in field_lower or "mécanique" in field_lower:
+                        user_faculty = "Génie Mécanique"
+        
+        if not user_level and user_profile and hasattr(user_profile, 'level'):
+            user_level = user_profile.level
+        
+        if not user_interests and user_profile and hasattr(user_profile, 'interests') and user_profile.interests:
             if isinstance(user_profile.interests, str):
                 user_interests = [i.strip() for i in user_profile.interests.split(',') if i.strip()]
-        elif user_preferences and hasattr(user_preferences, 'interests') and user_preferences.interests:
+        
+        # Priorité 3: User preferences (si pas déjà définis)
+        if not user_faculty and user_preferences:
+            if hasattr(user_preferences, 'faculty'):
+                user_faculty = user_preferences.faculty
+            if hasattr(user_preferences, 'field'):
+                user_field = user_preferences.field
+        
+        if not user_level and user_preferences and hasattr(user_preferences, 'level'):
+            user_level = user_preferences.level
+        
+        if not user_interests and user_preferences and hasattr(user_preferences, 'interests') and user_preferences.interests:
             if isinstance(user_preferences.interests, str):
                 user_interests = [i.strip() for i in user_preferences.interests.split(',') if i.strip()]
         
@@ -327,48 +333,68 @@ async def recommend_sujets(
         print(f"   - Niveau: {user_level}")
         print(f"   - Intérêts: {user_interests}")
         
-        # ===== 3. CONSTRUIRE LA REQUÊTE AVEC FILTRAGE STRICT =====
+        # ===== 3. CONSTRUIRE LA REQUÊTE AVEC FILTRAGE =====
         query = db.query(Sujet).filter(Sujet.is_active == True)
         
-        # FILTRAGE PAR FACULTÉ (TRÈS STRICT)
+        # FILTRAGE PAR FACULTÉ/DOMAINE
         if user_faculty:
-            print(f"🔍 FILTRAGE STRICT par faculté: '{user_faculty}'")
-            # Utiliser une correspondance flexible (contient, pas égalité stricte)
-            query = query.filter(
+            print(f"🔍 FILTRAGE par faculté: '{user_faculty}'")
+            # Nettoyer la faculté pour la recherche
+            faculty_search = user_faculty.lower().replace('génie', '').replace('genie', '').strip()
+            
+            # Chercher dans faculté et domaine
+            faculty_condition = (
                 (Sujet.faculté.ilike(f"%{user_faculty}%")) |
-                (Sujet.domaine.ilike(f"%{user_faculty}%"))
+                (Sujet.faculté.ilike(f"%{faculty_search}%")) |
+                (Sujet.domaine.ilike(f"%{user_faculty}%")) |
+                (Sujet.domaine.ilike(f"%{faculty_search}%"))
             )
+            query = query.filter(faculty_condition)
         elif user_field:
-            print(f"🔍 FILTRAGE STRICT par domaine: '{user_field}'")
-            query = query.filter(
+            print(f"🔍 FILTRAGE par domaine: '{user_field}'")
+            field_search = user_field.lower().replace('génie', '').replace('genie', '').strip()
+            
+            field_condition = (
                 (Sujet.domaine.ilike(f"%{user_field}%")) |
-                (Sujet.faculté.ilike(f"%{user_field}%"))
+                (Sujet.domaine.ilike(f"%{field_search}%")) |
+                (Sujet.faculté.ilike(f"%{user_field}%")) |
+                (Sujet.faculté.ilike(f"%{field_search}%"))
             )
-        else:
-            # Si pas de faculté/domaine, prendre tous les sujets mais avec un avertissement
-            print("⚠️ AUCUNE FACULTÉ/DOMAINE DÉFINI, prise de tous les sujets")
+            query = query.filter(field_condition)
         
         # FILTRAGE PAR NIVEAU (si disponible)
         if user_level:
             print(f"🔍 Filtrage par niveau: '{user_level}'")
-            query = query.filter(Sujet.niveau.ilike(f"%{user_level}%"))
+            level_search = user_level.lower().replace('licence', '').replace('master', '').replace('doctorat', '').strip()
+            
+            level_condition = (
+                (Sujet.niveau.ilike(f"%{user_level}%")) |
+                (Sujet.niveau.ilike(f"%{level_search}%"))
+            )
+            query = query.filter(level_condition)
         
         # Exécuter la requête
         sujets = query.all()
-        print(f"📚 {len(sujets)} sujets trouvés après filtrage par faculté/domaine")
+        print(f"📚 {len(sujets)} sujets trouvés après filtrage")
         
-        # Si trop peu de sujets, élargir un peu mais GARDER la faculté
-        if len(sujets) < 5 and user_faculty:
-            print("⚠️ Trop peu de sujets, élargissement mais garde la faculté")
+        # Si trop peu de sujets, élargir
+        if len(sujets) < 5 and (user_faculty or user_field):
+            print("⚠️ Trop peu de sujets, élargissement...")
             query = db.query(Sujet).filter(Sujet.is_active == True)
-            query = query.filter(
-                (Sujet.faculté.ilike(f"%{user_faculty}%")) |
-                (Sujet.domaine.ilike(f"%{user_faculty}%"))
-            )
-            sujets = query.all()
+            
+            if user_faculty:
+                faculty_condition = (
+                    (Sujet.faculté.ilike(f"%{user_faculty}%")) |
+                    (Sujet.faculté.ilike(f"%{faculty_search}%")) |
+                    (Sujet.domaine.ilike(f"%{user_faculty}%")) |
+                    (Sujet.domaine.ilike(f"%{faculty_search}%"))
+                )
+                query = query.filter(faculty_condition)
+            
+            sujets = query.limit(20).all()
             print(f"📚 {len(sujets)} sujets après élargissement")
         
-        # ===== 4. CONVERTIR EN DICTIONNAIRES AVEC TOUS LES CHAMPS =====
+        # ===== 4. CONVERTIR EN DICTIONNAIRES =====
         sujets_dict = []
         for sujet in sujets:
             sujet_dict = {
@@ -383,11 +409,11 @@ async def recommend_sujets(
                 "problématique": sujet.problématique or "",
                 "vue_count": sujet.vue_count or 0,
                 "like_count": sujet.like_count or 0,
-                "created_at": datetime.now().isoformat()  # Valeur par défaut
+                "created_at": datetime.now().isoformat()
             }
             sujets_dict.append(sujet_dict)
         
-        # ===== 5. PRÉPARER LES CRITÈRES POUR LE SCORING =====
+        # ===== 5. PRÉPARER LES CRITÈRES =====
         critères = {}
         if user_faculty:
             critères["faculté"] = user_faculty
@@ -398,33 +424,42 @@ async def recommend_sujets(
         
         print(f"📊 Critères pour scoring: {critères}")
         
-        # ===== 6. GÉNÉRER LES RECOMMANDATIONS AVEC SCORING =====
+        # ===== 6. GÉNÉRER LES RECOMMANDATIONS =====
         recommendations = []
         
         for sujet_dict in sujets_dict:
-            score = 50  # Score de base
+            score = 50
             raisons = []
             critères_respectés = []
             
             # --- CORRESPONDANCE FACULTÉ (30 points) ---
             if user_faculty and sujet_dict.get("faculté"):
-                if user_faculty.lower() in sujet_dict["faculté"].lower() or sujet_dict["faculté"].lower() in user_faculty.lower():
+                sujet_fac = sujet_dict["faculté"].lower()
+                user_fac_lower = user_faculty.lower()
+                
+                if (user_fac_lower in sujet_fac or 
+                    sujet_fac in user_fac_lower or
+                    any(term in sujet_fac for term in ["info", "informatique"] if "info" in user_fac_lower)):
                     score += 30
                     raisons.append(f"Correspond à votre faculté: {sujet_dict['faculté']}")
                     critères_respectés.append("faculté")
             
             # --- CORRESPONDANCE DOMAINE (25 points) ---
             if user_field and sujet_dict.get("domaine"):
-                if user_field.lower() in sujet_dict["domaine"].lower() or sujet_dict["domaine"].lower() in user_field.lower():
+                sujet_dom = sujet_dict["domaine"].lower()
+                user_dom_lower = user_field.lower()
+                
+                if (user_dom_lower in sujet_dom or 
+                    sujet_dom in user_dom_lower or
+                    any(term in sujet_dom for term in ["info", "informatique"] if "info" in user_dom_lower)):
                     score += 25
-                    if not raisons or "faculté" not in str(raisons):
+                    if "faculté" not in str(raisons):
                         raisons.append(f"Dans votre domaine: {sujet_dict['domaine']}")
                     critères_respectés.append("domaine")
             
             # --- CORRESPONDANCE INTÉRÊTS (20 points) ---
             titre = sujet_dict.get("titre", "").lower()
             keywords = sujet_dict.get("keywords", "").lower()
-            description = sujet_dict.get("description", "").lower()
             
             for interest in user_interests:
                 if not interest:
@@ -443,28 +478,21 @@ async def recommend_sujets(
             
             # --- CORRESPONDANCE NIVEAU (15 points) ---
             if user_level and sujet_dict.get("niveau"):
-                if user_level.lower() in sujet_dict["niveau"].lower() or sujet_dict["niveau"].lower() in user_level.lower():
+                sujet_niv = sujet_dict["niveau"].lower()
+                user_niv_lower = user_level.lower()
+                
+                if (user_niv_lower in sujet_niv or 
+                    sujet_niv in user_niv_lower or
+                    ("l3" in sujet_niv and "licence" in user_niv_lower)):
                     score += 15
                     if "niveau" not in str(raisons):
                         raisons.append(f"Niveau adapté: {sujet_dict['niveau']}")
                     critères_respectés.append("niveau")
             
-            # --- PÉNALITÉ POUR LES SUJETS HORS DOMAINE ---
-            # Si le sujet est clairement d'une autre faculté, réduire le score
-            sujet_faculte = sujet_dict.get("faculté", "").lower()
-            if user_faculty and sujet_faculte:
-                if "electrique" in sujet_faculte and "informatique" not in user_faculty.lower():
-                    score -= 20
-                elif "civil" in sujet_faculte and "informatique" not in user_faculty.lower():
-                    score -= 20
-                elif "mecanique" in sujet_faculte and "informatique" not in user_faculty.lower():
-                    score -= 20
-            
-            # S'assurer que le score est entre 0 et 100
+            # Normaliser le score
             score = max(0, min(100, score))
             
-            # Ajouter aux recommandations si le score est suffisant
-            if score >= 30:  # Seuil minimum
+            if score >= 30:
                 if not raisons:
                     raisons = ["Sujet pertinent"]
                 
@@ -475,16 +503,16 @@ async def recommend_sujets(
                     "critères_respectés": critères_respectés or ["Pertinence"]
                 })
         
-        # Trier par score décroissant
+        # Trier par score
         recommendations.sort(key=lambda x: x["score"], reverse=True)
         
-        # Limiter le nombre de résultats
+        # Limiter
         limit = min(request.limit or 10, 20)
         recommendations = recommendations[:limit]
         
         print(f"✅ {len(recommendations)} recommandations finales")
         
-        # Afficher la répartition par faculté pour déboguer
+        # Afficher la répartition
         facultes = {}
         for rec in recommendations:
             fac = rec["sujet"].get("faculté", "Inconnu")
@@ -494,10 +522,9 @@ async def recommend_sujets(
         return recommendations
         
     except Exception as e:
-        print(f"❌ Erreur dans recommend_sujets: {e}")
+        print(f"❌ Erreur: {e}")
         import traceback
         traceback.print_exc()
-        # Retourner une liste vide en cas d'erreur
         return []
     
 @router.post("/generate")

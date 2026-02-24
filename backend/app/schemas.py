@@ -3,7 +3,6 @@ from pydantic import BaseModel, Field, EmailStr, validator
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List, Dict, Any
 
 # Enums
 class UserRole(str, Enum):
@@ -96,63 +95,88 @@ class SujetUpdate(BaseModel):
     ressources: Optional[str] = None
     is_active: Optional[bool] = None
 
-class Sujet(SujetBase):
+class Sujet(BaseModel):
+    """Modèle Sujet avec tous les champs optionnels pour éviter les erreurs de validation"""
     id: int
-    # Accept both int and str to be robust against dirty DB data
-    vue_count: Union[int, str] = 0
-    like_count: Union[int, str] = 0
+    titre: str = ""
+    keywords: str = ""
+    domaine: str = ""
+    faculté: str = ""
+    niveau: str = ""
+    problématique: str = ""
+    méthodologie: Optional[str] = ""
+    technologies: Optional[str] = ""
+    description: str = ""
+    difficulté: str = "moyenne"
+    durée_estimée: Optional[str] = ""
+    ressources: Optional[str] = ""
+    vue_count: int = 0
+    like_count: int = 0
     is_active: bool = True
-    created_at: datetime
-
-    # Ces champs peuvent être optionnels dans la réponse
     user_id: Optional[int] = None
+    created_at: Optional[datetime] = None  # OPTIONNEL !
     updated_at: Optional[datetime] = None
     is_generated: Optional[bool] = False
 
     @validator("vue_count", "like_count", pre=True)
     def normalize_counts(cls, v):
-        """
-        Normalise les compteurs:
-        - int -> int
-        - "10" -> 10
-        - "10 vues" -> 10
-        - autres valeurs -> 0
-        """
+        """Normalise les compteurs en entiers"""
         if v is None:
             return 0
         if isinstance(v, int):
             return v
         if isinstance(v, str):
+            # Extraire uniquement les chiffres
             digits = ''.join(ch for ch in v if ch.isdigit())
             if digits:
                 try:
                     return int(digits)
                 except ValueError:
                     return 0
-        # Si vraiment pas convertible, fallback à 0
         return 0
+
+    @validator("difficulté", pre=True)
+    def normalize_difficulte(cls, v):
+        """Normalise la difficulté"""
+        if v is None:
+            return "moyenne"
+        if isinstance(v, DifficultyLevel):
+            return v.value
+        if isinstance(v, str):
+            if v.lower() in ["facile", "moyenne", "difficile"]:
+                return v.lower()
+            return "moyenne"
+        return "moyenne"
 
     class Config:
         from_attributes = True
+        # Permettre les champs supplémentaires
+        extra = "allow"
         json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
+            datetime: lambda v: v.isoformat() if v else None,
+            DifficultyLevel: lambda v: v.value
         }
-        
+
 # ========== RECOMMENDATION SCHEMAS ==========
 class RecommendationRequest(BaseModel):
-    interests: List[str] = Field(..., description="Centres d'intérêt")
+    interests: List[str] = Field(default_factory=list, description="Centres d'intérêt")
     niveau: Optional[str] = None
     faculté: Optional[str] = None
     domaine: Optional[str] = None
     difficulté: Optional[DifficultyLevel] = None
     limit: int = Field(10, ge=1, le=50, description="Nombre de résultats")
 
+    class Config:
+        extra = "allow"
 
 class RecommendedSujet(BaseModel):
     sujet: Sujet
-    score: float = Field(..., ge=0, le=100, description="Score de correspondance (%)")
-    raisons: List[str] = Field(..., description="Raisons de la recommandation")
-    critères_respectés: List[str] = Field(..., description="Critères d'acceptation respectés")
+    score: float = Field(0, ge=0, le=100, description="Score de correspondance (%)")
+    raisons: List[str] = Field(default_factory=list, description="Raisons de la recommandation")
+    critères_respectés: List[str] = Field(default_factory=list, description="Critères d'acceptation respectés")
+
+    class Config:
+        extra = "allow"
 
 # ========== FEEDBACK SCHEMAS ==========
 class FeedbackCreate(BaseModel):
@@ -176,12 +200,14 @@ class Feedback(BaseModel):
     
     class Config:
         from_attributes = True
+        extra = "allow"
 
 # ========== USER PREFERENCE SCHEMAS ==========
 class UserPreferenceBase(BaseModel):
     interests: Optional[str] = None
     faculty: Optional[str] = None
     level: Optional[str] = None
+    field: Optional[str] = None  # Ajout du champ field
 
 class UserPreferenceCreate(UserPreferenceBase):
     pass
@@ -192,11 +218,12 @@ class UserPreferenceUpdate(UserPreferenceBase):
 class UserPreferenceResponse(UserPreferenceBase):
     id: int
     user_id: int
-    created_at: datetime
+    created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
+        extra = "allow"
 
 # ========== USER PROFILE SCHEMAS ==========
 class UserProfileBase(BaseModel):
@@ -224,6 +251,7 @@ class UserProfile(UserProfileBase):
     
     class Config:
         from_attributes = True
+        extra = "allow"
 
 class UserSkillBase(BaseModel):
     name: str
@@ -243,27 +271,35 @@ class UserSkill(UserSkillBase):
     
     class Config:
         from_attributes = True
+        extra = "allow"
 
 class UserStats(BaseModel):
-    profile_completion: int
-    explored_subjects: int
-    recommendations_count: int
-    active_days: int
-    last_active: datetime
+    profile_completion: int = 0
+    explored_subjects: int = 0
+    recommendations_count: int = 0
+    active_days: int = 0
+    last_active: Optional[datetime] = None
+
+    class Config:
+        extra = "allow"
 
 # ========== AI SCHEMAS ==========
 class AIRequest(BaseModel):
     question: str
     context: Optional[str] = None
 
+    class Config:
+        extra = "allow"
+
 class AIResponse(BaseModel):
     question: str
     message: str
     suggestions: List[str] = []
 
-
     class Config:
         from_attributes = True
+        extra = "allow"
+
 class AIAnalysisRequest(BaseModel):
     titre: str
     description: str
@@ -274,12 +310,18 @@ class AIAnalysisRequest(BaseModel):
     keywords: Optional[str] = None
     context: Optional[str] = None
 
+    class Config:
+        extra = "allow"
+
 class AIAnalysisResponse(BaseModel):
-    pertinence: int
-    points_forts: List[str]
-    points_faibles: List[str]
-    suggestions: List[str]
-    recommandations: List[str]
+    pertinence: int = 0
+    points_forts: List[str] = []
+    points_faibles: List[str] = []
+    suggestions: List[str] = []
+    recommandations: List[str] = []
+
+    class Config:
+        extra = "allow"
 
 class AnalyzeSubjectRequest(BaseModel):
     titre: str
@@ -293,110 +335,153 @@ class AnalyzeSubjectRequest(BaseModel):
     
     class Config:
         from_attributes = True
+        extra = "allow"
 
 class GenerateSubjectsRequest(BaseModel):
-    interests: List[str]
+    interests: List[str] = []
     domaine: Optional[str] = None
     niveau: Optional[str] = None
     faculté: Optional[str] = None
-    count: Optional[int] = 3
+    count: int = 3
+
+    class Config:
+        extra = "allow"
 
 class GeneratedSubject(BaseModel):
-    titre: str
-    problématique: str
-    keywords: str
-    description: str
-    methodologie: str
-    difficulté: str
-    durée_estimée: str
+    titre: str = ""
+    problématique: str = ""
+    keywords: str = ""
+    description: str = ""
+    methodologie: str = ""
+    difficulté: str = "moyenne"
+    durée_estimée: str = ""
+
+    class Config:
+        extra = "allow"
 
 class GeneratedSubjectItem(BaseModel):
     """Modèle pour les sujets générés par IA"""
-    titre: str
-    description: str
-    problématique: str
-    keywords: str
-    domaine: str
-    niveau: str
-    faculté: str
-    difficulté: str
-    durée_estimée: str
-    methodologie: Optional[str] = None
-    original: Optional[bool] = True
+    titre: str = ""
+    description: str = ""
+    problématique: str = ""
+    keywords: str = ""
+    domaine: str = ""
+    niveau: str = ""
+    faculté: str = ""
+    difficulté: str = "moyenne"
+    durée_estimée: str = ""
+    methodologie: Optional[str] = ""
+    original: bool = True
     generated_at: Optional[str] = None
     session_id: Optional[str] = None
     index: Optional[int] = None
 
+    class Config:
+        extra = "allow"
+
 class AIGeneratedSubjects(BaseModel):
-    session_id: str
-    subjects: List[GeneratedSubjectItem]  # Correction ici: List[dict[str, any]] -> List[GeneratedSubjectItem]
-    count: int
-    message: str
+    session_id: str = ""
+    subjects: List[GeneratedSubjectItem] = []
+    count: int = 0
+    message: str = ""
+
+    class Config:
+        extra = "allow"
 
 class SaveChosenSubjectRequest(BaseModel):
-    titre: str
-    description: str
-    keywords: str
-    domaine: str
-    niveau: str
-    faculté: str
-    problématique: str
-    méthodologie: str
-    difficulté: str
-    durée_estimée: str
+    titre: str = ""
+    description: str = ""
+    keywords: str = ""
+    domaine: str = ""
+    niveau: str = ""
+    faculté: str = ""
+    problématique: str = ""
+    méthodologie: str = ""
+    difficulté: str = "moyenne"
+    durée_estimée: str = ""
     interests: Optional[List[str]] = None
 
+    class Config:
+        extra = "allow"
+
 class ActionButton(BaseModel):
-    text: str
-    action: str
+    text: str = ""
+    action: str = ""
     icon: Optional[str] = None
+
+    class Config:
+        extra = "allow"
 
 class AIChatRequest(BaseModel):
     message: str
     context: Optional[str] = None
 
+    class Config:
+        extra = "allow"
+
 class AIChatResponse(BaseModel):
-    message: str
+    message: str = ""
     suggestions: List[str] = []
-    actions: List[ActionButton] = []  # Correction ici: List[dict[str, str]] -> List[ActionButton]
-    timestamp: str
+    actions: List[ActionButton] = []
+    timestamp: str = ""
+
+    class Config:
+        extra = "allow"
 
 class AcceptanceCriteria(BaseModel):
-    critères_acceptation: List[str]
-    critères_rejet: List[str]
-    conseils_pratiques: List[str]
+    critères_acceptation: List[str] = []
+    critères_rejet: List[str] = []
+    conseils_pratiques: List[str] = []
+
+    class Config:
+        extra = "allow"
 
 class TipsResponse(BaseModel):
-    choix_sujet: List[str]
-    methodologie: List[str]
-    redaction: List[str]
-    soutenance: List[str]
+    choix_sujet: List[str] = []
+    methodologie: List[str] = []
+    redaction: List[str] = []
+    soutenance: List[str] = []
+
+    class Config:
+        extra = "allow"
 
 class AIRecommendation(BaseModel):
     id: int
-    score: float
-    raisons: List[str]
-    critères: List[str]
+    score: float = 0
+    raisons: List[str] = []
+    critères: List[str] = []
+
+    class Config:
+        extra = "allow"
 
 # ========== UTILITY SCHEMAS ==========
 class PopularKeyword(BaseModel):
-    keyword: str
-    count: int
+    keyword: str = ""
+    count: int = 0
+
+    class Config:
+        extra = "allow"
 
 class DomainStats(BaseModel):
-    domaine: str
-    count: int
-    avg_views: float
+    domaine: str = ""
+    count: int = 0
+    avg_views: float = 0
+
+    class Config:
+        extra = "allow"
 
 # ========== DASHBOARD SCHEMAS ==========
 class DashboardStats(BaseModel):
-    total_sujets: int
-    user_sujets: int
-    saved_sujets: int
-    recommendations_count: int
+    total_sujets: int = 0
+    user_sujets: int = 0
+    saved_sujets: int = 0
+    recommendations_count: int = 0
     last_activity: Optional[datetime] = None
     popular_keywords: List[PopularKeyword] = []
     domain_stats: List[DomainStats] = []
+
+    class Config:
+        extra = "allow"
 
 # ========== SETTINGS SCHEMAS ==========
 class SettingsBase(BaseModel):
@@ -419,10 +504,11 @@ class Settings(SettingsBase):
     
     class Config:
         from_attributes = True
+        extra = "allow"
 
 # ========== HISTORY & CONVERSATION SCHEMAS ==========
 class UserHistoryBase(BaseModel):
-    action: str
+    action: str = ""
     details: Optional[str] = None
     sujet_id: Optional[int] = None
 
@@ -436,10 +522,11 @@ class UserHistory(UserHistoryBase):
     
     class Config:
         from_attributes = True
+        extra = "allow"
 
 class ConversationMessageBase(BaseModel):
-    role: str
-    content: str
+    role: str = ""
+    content: str = ""
 
 class ConversationMessageCreate(ConversationMessageBase):
     user_id: int
@@ -451,9 +538,15 @@ class ConversationMessage(ConversationMessageBase):
     
     class Config:
         from_attributes = True
-class ResetConversationResponse(BaseModel):
-    success: bool
-    message: str
-    deleted_count: int
+        extra = "allow"
 
+class ResetConversationResponse(BaseModel):
+    success: bool = False
+    message: str = ""
+    deleted_count: int = 0
+
+    class Config:
+        extra = "allow"
+
+# Alias pour compatibilité
 UserPreference = UserPreferenceResponse

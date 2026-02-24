@@ -299,72 +299,197 @@ def recommander_sujets_llm(
     sujets: List[Dict],
     critères: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
-    """Recommande des sujets de manière experte"""
-    
-
-def recommander_sujets_llm(
-    interests: List[str],
-    sujets: List[Dict],
-    critères: Dict[str, Any],
-) -> List[Dict[str, Any]]:
     """Recommande des sujets de manière experte avec scores normalisés"""
+    # Gestion des entrées None
+    if interests is None:
+        interests = []
+    elif isinstance(interests, str):
+        interests = [i.strip() for i in interests.split(',') if i.strip()]
+    
+    if critères is None:
+        critères = {}
+    
+    # Nettoyer les critères pour éviter les None
+    critères_propres = {}
+    for k, v in critères.items():
+        if v is not None and v != "":
+            # S'assurer que c'est une chaîne de caractères
+            if not isinstance(v, str):
+                v = str(v)
+            critères_propres[k] = v
+    
+    print(f"🎯 Critères nettoyés pour LLM: {critères_propres}")
+    
     if not sujets:
         return []
     
     # Si LLM n'est pas disponible, utiliser le fallback intelligent
     if not llm:
-        return fallback_recommendation(interests, sujets, critères)
+        print("⚠️ LLM non disponible, utilisation du fallback")
+        return fallback_recommendation(interests, sujets, critères_propres)
+    
+    try:
+        # Filtrer et noter les sujets avec LLM
+        results = []
+        for sujet in sujets[:20]:  # Limiter à 20 pour la performance
+            score = 0
+            raisons = []
+            critères_respectés = []
+            
+            # Vérifier les intérêts
+            titre = sujet.get("titre", "").lower() if sujet.get("titre") else ""
+            description = sujet.get("description", "").lower() if sujet.get("description") else ""
+            keywords = sujet.get("keywords", "").lower() if sujet.get("keywords") else ""
+            
+            for interest in interests:
+                if not interest or not isinstance(interest, str):
+                    continue
+                interest_lower = interest.lower()
+                if interest_lower in titre:
+                    score += 30
+                    raisons.append(f"Correspond à votre intérêt pour '{interest}'")
+                elif interest_lower in keywords:
+                    score += 20
+                    raisons.append(f"Lié à votre intérêt pour '{interest}'")
+                elif interest_lower in description:
+                    score += 10
+            
+            # Vérifier le niveau
+            niveau_etudiant = critères_propres.get("niveau", "").lower()
+            niveau_sujet = sujet.get("niveau", "").lower() if sujet.get("niveau") else ""
+            if niveau_etudiant and niveau_sujet:
+                if niveau_etudiant in niveau_sujet or niveau_sujet in niveau_etudiant:
+                    score += 20
+                    raisons.append(f"Niveau adapté: {niveau_sujet}")
+                    critères_respectés.append("niveau")
+            
+            # Vérifier le domaine
+            domaine_etudiant = critères_propres.get("domaine", "").lower()
+            domaine_sujet = sujet.get("domaine", "").lower() if sujet.get("domaine") else ""
+            if domaine_etudiant and domaine_sujet:
+                if domaine_etudiant in domaine_sujet or domaine_sujet in domaine_etudiant:
+                    score += 25
+                    raisons.append(f"Dans votre domaine: {domaine_sujet}")
+                    critères_respectés.append("domaine")
+            
+            # Vérifier la faculté
+            faculté_etudiant = critères_propres.get("faculté", "").lower()
+            faculté_sujet = sujet.get("faculté", "").lower() if sujet.get("faculté") else ""
+            if faculté_etudiant and faculté_sujet:
+                if faculté_etudiant in faculté_sujet or faculté_sujet in faculté_etudiant:
+                    score += 25
+                    raisons.append(f"Correspond à votre faculté: {sujet.get('faculté')}")
+                    critères_respectés.append("faculté")
+            
+            # Vérifier la difficulté
+            difficulté_etudiant = critères_propres.get("difficulté", "").lower()
+            difficulté_sujet = sujet.get("difficulté", "").lower() if sujet.get("difficulté") else ""
+            if difficulté_etudiant and difficulté_sujet:
+                if difficulté_etudiant == difficulté_sujet:
+                    score += 15
+                    raisons.append(f"Difficulté adaptée: {difficulté_sujet}")
+                    critères_respectés.append("difficulté")
+            
+            # Bonus pour les sujets populaires
+            vue_count = sujet.get("vue_count", 0)
+            like_count = sujet.get("like_count", 0)
+            if vue_count and vue_count > 50:
+                score += 5
+                if not raisons:
+                    raisons.append("Sujet populaire")
+            if like_count and like_count > 10:
+                score += 5
+                if not raisons and len(raisons) < 2:
+                    raisons.append("Bien noté par la communauté")
+            
+            # Seuil minimum de pertinence (ajusté pour être plus inclusif)
+            if score > 20:
+                # Normaliser le score entre 0 et 100
+                score_normalise = min(100, score)
+                
+                if not raisons:
+                    raisons = ["Sujet pertinent pour votre profil"]
+                
+                if not critères_respectés and (faculté_etudiant or domaine_etudiant):
+                    # Si aucun critère spécifique n'est respecté mais que le sujet est dans le lot
+                    critères_respectés = ["Pertinence générale"]
+                
+                # CRITIQUE: S'assurer que le sujet a tous les champs requis
+                sujet_complet = sujet.copy()
+                
+                # Ajouter created_at si manquant (avec une valeur par défaut)
+                if 'created_at' not in sujet_complet or sujet_complet['created_at'] is None:
+                    # Utiliser la date actuelle comme fallback
+                    sujet_complet['created_at'] = datetime.now().isoformat()
+                
+                # S'assurer que tous les champs requis sont présents
+                champs_requis = ['id', 'titre', 'description', 'keywords', 'domaine', 
+                                  'niveau', 'faculté', 'difficulté', 'problématique', 
+                                  'vue_count', 'like_count', 'created_at']
+                
+                for champ in champs_requis:
+                    if champ not in sujet_complet or sujet_complet[champ] is None:
+                        if champ == 'created_at':
+                            sujet_complet[champ] = datetime.now().isoformat()
+                        elif champ in ['vue_count', 'like_count']:
+                            sujet_complet[champ] = 0
+                        elif champ == 'difficulté':
+                            sujet_complet[champ] = 'moyenne'
+                        else:
+                            sujet_complet[champ] = ''
+                
+                results.append({
+                    "sujet": sujet_complet,
+                    "score": score_normalise,
+                    "raisons": raisons[:3],  # Garder les 3 meilleures raisons
+                    "critères_respectés": critères_respectés or ["Pertinence"]
+                })
+        
+        # Si pas de résultats avec le seuil, prendre les meilleurs sujets
+        if not results and sujets:
+            print("⚠️ Aucun sujet avec score >20, prise des meilleurs disponibles")
+            for i, sujet in enumerate(sujets[:10]):
+                # CRITIQUE: S'assurer que le sujet a tous les champs requis
+                sujet_complet = sujet.copy()
+                
+                # Ajouter created_at si manquant
+                if 'created_at' not in sujet_complet or sujet_complet['created_at'] is None:
+                    sujet_complet['created_at'] = datetime.now().isoformat()
+                
+                # S'assurer que tous les champs requis sont présents
+                champs_requis = ['id', 'titre', 'description', 'keywords', 'domaine', 
+                                  'niveau', 'faculté', 'difficulté', 'problématique', 
+                                  'vue_count', 'like_count', 'created_at']
+                
+                for champ in champs_requis:
+                    if champ not in sujet_complet or sujet_complet[champ] is None:
+                        if champ == 'created_at':
+                            sujet_complet[champ] = datetime.now().isoformat()
+                        elif champ in ['vue_count', 'like_count']:
+                            sujet_complet[champ] = 0
+                        elif champ == 'difficulté':
+                            sujet_complet[champ] = 'moyenne'
+                        else:
+                            sujet_complet[champ] = ''
+                
+                results.append({
+                    "sujet": sujet_complet,
+                    "score": 70 - (i * 5),  # Score décroissant
+                    "raisons": ["Sujet recommandé"],
+                    "critères_respectés": ["Disponible"]
+                })
+        
+        # Trier par score
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:20]  # Retourner jusqu'à 20 résultats
+        
+    except Exception as e:
+        print(f"❌ Erreur dans recommander_sujets_llm: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback en cas d'erreur
+        return fallback_recommendation(interests, sujets, critères_propres)
 
-    
-    # Filtrer et noter les sujets
-    results = []
-    for sujet in sujets[:10]:  # Limiter à 10 pour la performance
-        score = 0
-        raisons = []
-        
-        # Vérifier les intérêts
-        titre = sujet.get("titre", "").lower()
-        description = sujet.get("description", "").lower()
-        keywords = sujet.get("keywords", "").lower()
-        
-        for interest in interests:
-            interest_lower = interest.lower()
-            if interest_lower in titre:
-                score += 30
-                raisons.append(f"Correspond à votre intérêt pour '{interest}'")
-            elif interest_lower in keywords:
-                score += 20
-                raisons.append(f"Lié à votre intérêt pour '{interest}'")
-            elif interest_lower in description:
-                score += 10
-        
-        # Vérifier le niveau
-        niveau_etudiant = critères.get("niveau", "").lower()
-        niveau_sujet = sujet.get("niveau", "").lower()
-        if niveau_etudiant and niveau_sujet:
-            if niveau_etudiant in niveau_sujet or niveau_sujet in niveau_etudiant:
-                score += 20
-                raisons.append(f"Niveau adapté: {niveau_sujet}")
-        
-        # Vérifier le domaine
-        domaine_etudiant = critères.get("domaine", "").lower()
-        domaine_sujet = sujet.get("domaine", "").lower()
-        if domaine_etudiant and domaine_sujet:
-            if domaine_etudiant in domaine_sujet or domaine_sujet in domaine_etudiant:
-                score += 25
-                raisons.append(f"Dans votre domaine: {domaine_sujet}")
-        
-        if score > 30:  # Seuil minimum de pertinence
-            results.append({
-                "sujet": sujet,
-                "score": min(score, 100),
-                "raisons": raisons[:3],  # Garder les 3 meilleures raisons
-                "critères_respectés": ["Pertinence", "Adéquation profil"]
-            })
-    
-    # Trier par score
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:5]  # Retourner les 5 meilleurs
 
 def fallback_recommendation(
     interests: List[str], 
@@ -372,65 +497,194 @@ def fallback_recommendation(
     critères: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
     """Fallback intelligent pour les recommandations sans LLM"""
+    # Gestion des entrées None
+    if interests is None:
+        interests = []
+    elif isinstance(interests, str):
+        interests = [i.strip() for i in interests.split(',') if i.strip()]
+    
+    if critères is None:
+        critères = {}
+    
+    # Nettoyer les critères
+    critères_propres = {k: v.lower() if isinstance(v, str) else v for k, v in critères.items() if v is not None}
+    
+    print(f"🎯 Fallback avec critères: {critères_propres}")
+    print(f"🎯 Fallback avec intérêts: {interests}")
+    
     results = []
     
     # Filtrer les sujets pertinents
-    for sujet in sujets[:20]:
+    for sujet in sujets[:50]:  # Analyser plus de sujets
         score = 0
         raisons = []
+        critères_respectés = []
         
-        # Vérifier les intérêts dans le titre
-        titre = sujet.get("titre", "").lower()
-        description = sujet.get("description", "").lower()
-        keywords = sujet.get("keywords", "").lower()
+        # --- CORRESPONDANCE AVEC LA FACULTÉ (PRIORITAIRE) ---
+        faculté_etudiant = critères_propres.get("faculté", "").lower()
+        faculté_sujet = sujet.get("faculté", "").lower() if sujet.get("faculté") else ""
+        if faculté_etudiant and faculté_sujet:
+            # Correspondance exacte ou partielle
+            if faculté_etudiant == faculté_sujet or faculté_etudiant in faculté_sujet or faculté_sujet in faculté_etudiant:
+                score += 30
+                raisons.append(f"Correspond à votre faculté: {sujet.get('faculté')}")
+                critères_respectés.append("faculté")
+                print(f"✅ Correspondance faculté: {faculté_etudiant} == {faculté_sujet}")
+        
+        # --- CORRESPONDANCE AVEC LE DOMAINE ---
+        domaine_etudiant = critères_propres.get("domaine", "").lower()
+        domaine_sujet = sujet.get("domaine", "").lower() if sujet.get("domaine") else ""
+        if domaine_etudiant and domaine_sujet:
+            if domaine_etudiant == domaine_sujet or domaine_etudiant in domaine_sujet or domaine_sujet in domaine_etudiant:
+                score += 25
+                raisons.append(f"Dans votre domaine: {sujet.get('domaine')}")
+                critères_respectés.append("domaine")
+        
+        # --- VÉRIFICATION DES INTÉRÊTS ---
+        titre = sujet.get("titre", "").lower() if sujet.get("titre") else ""
+        description = sujet.get("description", "").lower() if sujet.get("description") else ""
+        keywords = sujet.get("keywords", "").lower() if sujet.get("keywords") else ""
         
         for interest in interests:
+            if not interest or not isinstance(interest, str):
+                continue
             interest_lower = interest.lower()
-            if not interest_lower or len(interest_lower) < 3:
+            if len(interest_lower) < 2:
                 continue
                 
             if interest_lower in titre:
-                score += 25
-                raisons.append(f"Correspond à '{interest}' dans le titre")
-            elif interest_lower in keywords:
                 score += 20
-                raisons.append(f"Lié à '{interest}' dans les mots-clés")
-            elif interest_lower in description:
+                raisons.append(f"Correspond à votre intérêt '{interest}' dans le titre")
+                if "intérêt" not in critères_respectés:
+                    critères_respectés.append("intérêts")
+            elif interest_lower in keywords:
                 score += 15
-                raisons.append(f"En lien avec '{interest}'")
+                raisons.append(f"Lié à votre intérêt '{interest}'")
+                if "intérêt" not in critères_respectés:
+                    critères_respectés.append("intérêts")
+            elif interest_lower in description:
+                score += 10
+                if "intérêt" not in critères_respectés and len(raisons) < 3:
+                    raisons.append(f"En lien avec '{interest}'")
+                    if "intérêt" not in critères_respectés:
+                        critères_respectés.append("intérêts")
         
-        # Vérifier le niveau
-        niveau_etudiant = critères.get("niveau", "").lower()
-        niveau_sujet = sujet.get("niveau", "").lower()
+        # --- CORRESPONDANCE AVEC LE NIVEAU ---
+        niveau_etudiant = critères_propres.get("niveau", "").lower()
+        niveau_sujet = sujet.get("niveau", "").lower() if sujet.get("niveau") else ""
         if niveau_etudiant and niveau_sujet:
             if niveau_etudiant in niveau_sujet or niveau_sujet in niveau_etudiant:
-                score += 20
-                raisons.append(f"Niveau adapté: {niveau_sujet}")
-        
-        # Vérifier le domaine
-        domaine_etudiant = critères.get("domaine", "").lower()
-        domaine_sujet = sujet.get("domaine", "").lower()
-        if domaine_etudiant and domaine_sujet:
-            if domaine_etudiant in domaine_sujet or domaine_sujet in domaine_etudiant:
                 score += 15
-                raisons.append(f"Dans le domaine: {domaine_sujet}")
+                if "Niveau adapté" not in raisons:
+                    raisons.append(f"Niveau adapté: {sujet.get('niveau')}")
+                if "niveau" not in critères_respectés:
+                    critères_respectés.append("niveau")
+        
+        # --- CORRESPONDANCE AVEC LA DIFFICULTÉ ---
+        difficulté_etudiant = critères_propres.get("difficulté", "").lower()
+        difficulté_sujet = sujet.get("difficulté", "").lower() if sujet.get("difficulté") else ""
+        if difficulté_etudiant and difficulté_sujet:
+            if difficulté_etudiant == difficulté_sujet:
+                score += 10
+                if "difficulté" not in critères_respectés:
+                    critères_respectés.append("difficulté")
+        
+        # Bonus pour les sujets populaires
+        vue_count = sujet.get("vue_count", 0)
+        like_count = sujet.get("like_count", 0)
+        if vue_count and vue_count > 30:
+            score += 5
+        if like_count and like_count > 5:
+            score += 5
         
         # Ne garder que les sujets avec un score minimum
-        if score > 20:
-            # Normaliser le score entre 0 et 100
-            # On considère que le score maximum possible est 80
-            score_normalise = min(100, int((score / 80) * 100))
+        # Si l'utilisateur a une faculté définie, être plus sélectif
+        seuil_min = 30 if critères_propres.get("faculté") else 20
+        
+        if score >= seuil_min:
+            # S'assurer que le score ne dépasse pas 100
+            score_normalise = min(100, score)
+            
+            # S'assurer qu'on a au moins une raison
+            if not raisons:
+                if critères_propres.get("faculté"):
+                    raisons = ["Correspond à votre faculté"]
+                else:
+                    raisons = ["Sujet pertinent"]
+            
+            if not critères_respectés:
+                critères_respectés = ["Pertinence"]
+            
+            # CRITIQUE: S'assurer que le sujet a tous les champs requis
+            sujet_complet = sujet.copy()
+            
+            # Ajouter created_at si manquant
+            if 'created_at' not in sujet_complet or sujet_complet['created_at'] is None:
+                sujet_complet['created_at'] = datetime.now().isoformat()
+            
+            # S'assurer que tous les champs requis sont présents
+            champs_requis = ['id', 'titre', 'description', 'keywords', 'domaine', 
+                              'niveau', 'faculté', 'difficulté', 'problématique', 
+                              'vue_count', 'like_count', 'created_at']
+            
+            for champ in champs_requis:
+                if champ not in sujet_complet or sujet_complet[champ] is None:
+                    if champ == 'created_at':
+                        sujet_complet[champ] = datetime.now().isoformat()
+                    elif champ in ['vue_count', 'like_count']:
+                        sujet_complet[champ] = 0
+                    elif champ == 'difficulté':
+                        sujet_complet[champ] = 'moyenne'
+                    else:
+                        sujet_complet[champ] = ''
             
             results.append({
-                "sujet": sujet,
+                "sujet": sujet_complet,
                 "score": score_normalise,
                 "raisons": raisons[:3],
-                "critères_respectés": ["Pertinence", "Adéquation profil"]
+                "critères_respectés": critères_respectés
             })
     
     # Trier par score
     results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:10]
+    
+    # Si aucun résultat, prendre les premiers sujets avec un score minimum
+    if not results and sujets:
+        print("⚠️ Aucun résultat avec le seuil, prise des premiers sujets")
+        for i, sujet in enumerate(sujets[:10]):
+            # CRITIQUE: S'assurer que le sujet a tous les champs requis
+            sujet_complet = sujet.copy()
+            
+            # Ajouter created_at si manquant
+            if 'created_at' not in sujet_complet or sujet_complet['created_at'] is None:
+                sujet_complet['created_at'] = datetime.now().isoformat()
+            
+            # S'assurer que tous les champs requis sont présents
+            champs_requis = ['id', 'titre', 'description', 'keywords', 'domaine', 
+                              'niveau', 'faculté', 'difficulté', 'problématique', 
+                              'vue_count', 'like_count', 'created_at']
+            
+            for champ in champs_requis:
+                if champ not in sujet_complet or sujet_complet[champ] is None:
+                    if champ == 'created_at':
+                        sujet_complet[champ] = datetime.now().isoformat()
+                    elif champ in ['vue_count', 'like_count']:
+                        sujet_complet[champ] = 0
+                    elif champ == 'difficulté':
+                        sujet_complet[champ] = 'moyenne'
+                    else:
+                        sujet_complet[champ] = ''
+            
+            results.append({
+                "sujet": sujet_complet,
+                "score": 60 - (i * 3),
+                "raisons": ["Sujet disponible"],
+                "critères_respectés": ["Général"]
+            })
+    
+    print(f"✅ Fallback: {len(results)} résultats trouvés")
+    return results[:20]  # Retourner jusqu'à 20 résultats
+
 # ======================
 # GÉNÉRATION DE SUJETS (EXPORTÉE)
 # ======================

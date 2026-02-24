@@ -494,7 +494,7 @@ async def recommend_with_ai(
             faculté=request.faculté,
             domaine=request.domaine,
             difficulté=request.difficulté,
-            limit=request.limit
+            limit=request.limit 
         )
         
         # Convertir au format attendu
@@ -589,66 +589,80 @@ async def analyze_subject(
 
 @router.post("/generate-from-conversation", response_model=schemas.AIGeneratedSubjects)
 async def generate_subjects_from_conversation(
-    current_user = Depends(get_current_user),  
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Génère 3 sujets basés sur l'historique de conversation"""
     try:
-        # Récupérer toute la conversation
-        conversation_history = crud.get_conversation_history(db, current_user.id, limit=50)
-        
-        # Extraire le texte de l'utilisateur
-        user_messages = " ".join([
-            h.content for h in conversation_history 
-            if h.role == 'user'
-        ])
-        
-        if not user_messages or len(user_messages) < 100:
+        # 1️⃣ Récupérer l'historique de conversation
+        conversation_history = crud.get_conversation_history(
+            db, current_user.id, limit=15
+        )
+
+        if not conversation_history:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Pas assez d'informations dans la conversation. Parlez-moi davantage de votre projet."
+                status_code=400,
+                detail="Pas assez de conversation pour générer des sujets"
             )
-        
-        # Récupérer les préférences
+
+        # 2️⃣ Transformer l'historique en texte
+        history_text = "\n".join([
+            f"{msg.role}: {msg.content}"
+            for msg in reversed(conversation_history)
+        ])
+
+        # 3️⃣ Construire les paramètres à partir des préférences
         preference = crud.get_or_create_preference(db, current_user.id)
-        
-        # Préparer les paramètres de génération
         params = {
-            "interests": [user_messages],  # Utiliser toute la conversation comme intérêt
-            "domaine": preference.faculty if preference and preference.faculty else "Général",
-            "niveau": preference.level if preference and preference.level else "Master",
-            "faculté": preference.faculty if preference and preference.faculty else "Sciences"
+            "interests": preference.interests.split(",") if preference and preference.interests else [],
+            "domaine": preference.faculty if preference else "Général",
+            "niveau": preference.level if preference else "M2",
+            "faculté": preference.faculty if preference else "Sciences",
+            "conversation_context": history_text
         }
-        
-        # Générer 3 sujets
+
+        # 4️⃣ Générer les sujets avec LLM
         generated_subjects = générer_sujets_llm(params, 3)
-        
-        # Créer un identifiant de session
+
+        # 5️⃣ Créer un session_id
         import uuid
         session_id = str(uuid.uuid4())
-        
-        # Formater les sujets
+
+        # 6️⃣ Formater les sujets pour correspondre au schéma
         formatted_subjects = []
         for i, subject in enumerate(generated_subjects):
-            formatted_subject = {
+            # Normaliser keywords en str
+            keywords_value = subject.get("keywords", "")
+            if isinstance(keywords_value, list):
+                keywords_value = ", ".join(keywords_value)
+
+            # Normaliser problématique et méthodologie
+            problematique = subject.get("problématique", subject.get("problematique", ""))
+            methodologie = subject.get("methodologie", subject.get("méthodologie", ""))
+
+            # Normaliser difficulté
+            difficulty = subject.get("difficulté", "moyenne").lower()
+            if difficulty not in ["facile", "moyenne", "difficile"]:
+                difficulty = "moyenne"
+
+            formatted_subjects.append({
                 "session_id": session_id,
                 "index": i,
                 "titre": subject.get("titre", f"Sujet {i+1}"),
                 "description": subject.get("description", ""),
-                "problématique": subject.get("problématique", subject.get("problematique", "")),
-                "keywords": subject.get("keywords", ""),
-                "domaine": subject.get("domaine", params["domaine"]),
-                "niveau": subject.get("niveau", params["niveau"]),
-                "faculté": subject.get("faculté", params["faculté"]),
-                "difficulté": subject.get("difficulté", "moyenne"),
+                "problématique": problematique,
+                "keywords": keywords_value,
+                "domaine": subject.get("domaine", params.get("domaine", "Général")),
+                "niveau": subject.get("niveau", params.get("niveau", "M2")),
+                "faculté": subject.get("faculté", params.get("faculté", "Sciences")),
+                "difficulté": difficulty,
                 "durée_estimée": subject.get("durée_estimée", "6 mois"),
-                "methodologie": subject.get("methodologie", subject.get("méthodologie", "")),
+                "methodologie": methodologie,
                 "generated_at": subject.get("generated_at", datetime.utcnow().isoformat()),
                 "original": subject.get("original", True)
-            }
-            formatted_subjects.append(formatted_subject)
-        
-        # Sauvegarder cette génération dans l'historique
+            })
+
+        # 7️⃣ Sauvegarder dans l'historique
         history_data = schemas.UserHistoryCreate(
             user_id=current_user.id,
             action="generated_from_conversation",
@@ -659,16 +673,19 @@ async def generate_subjects_from_conversation(
             }
         )
         crud.create_user_history(db, history_data)
-        
+
+        # 8️⃣ Retourner la réponse
         return {
             "session_id": session_id,
             "subjects": formatted_subjects,
             "count": len(formatted_subjects),
             "message": f"3 sujets générés basés sur notre conversation ({len(conversation_history)} échanges)"
         }
-        
+
     except Exception as e:
         print(f"Erreur dans generate_from_conversation: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la génération: {str(e)}"

@@ -451,7 +451,9 @@ class ApiService {
   async getUserSujets(): Promise<Sujet[]> {
     return this.request<Sujet[]>('/sujets/user-sujets', {}, { cacheTTL: 10_000 })
   }
-
+async getDashboardOverview() {
+  return this.request('/dashboard/overview', {}, { cacheTTL: 30_000 })
+}
   async getUserFavoris(): Promise<Sujet[]> {
     return this.request<Sujet[]>('/sujets/favoris', {}, { cacheTTL: 10_000 })
   }
